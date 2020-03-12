@@ -33,8 +33,9 @@ import torch.nn as nn
 
 import Utils.graphTools as graphTools
 
-zeroTolerance = 1e-9 # Values below this number are considered zero.
-infiniteNumber = 1e12 # infinity equals this number
+zeroTolerance = 1e-9  # Values below this number are considered zero.
+infiniteNumber = 1e12  # infinity equals this number
+
 
 # WARNING: Only scalar bias.
 
@@ -109,14 +110,14 @@ def LSIGF(h, S, x, b=None):
     # For this, we first add the corresponding dimensions
     x = x.reshape([B, 1, G, N])
     S = S.reshape([1, E, N, N])
-    z = x.reshape([B, 1, 1, G, N]).repeat(1, E, 1, 1, 1) # This is for k = 0
+    z = x.reshape([B, 1, 1, G, N]).repeat(1, E, 1, 1, 1)  # This is for k = 0
     # We need to repeat along the E dimension, because for k=0, S_{e} = I for
     # all e, and therefore, the same signal values have to be used along all
     # edge feature dimensions.
-    for k in range(1,K):
-        x = torch.matmul(x, S) # B x E x G x N
-        xS = x.reshape([B, E, 1, G, N]) # B x E x 1 x G x N
-        z = torch.cat((z, xS), dim = 2) # B x E x k x G x N
+    for k in range(1, K):
+        x = torch.matmul(x, S)  # B x E x G x N
+        xS = x.reshape([B, E, 1, G, N])  # B x E x 1 x G x N
+        z = torch.cat((z, xS), dim=2)  # B x E x k x G x N
     # This output z is of size B x E x K x G x N
     # Now we have the x*S_{e}^{k} product, and we need to multiply with the
     # filter taps.
@@ -125,13 +126,14 @@ def LSIGF(h, S, x, b=None):
     # z to be B x N x E x K x G and reshape it to B x N x EKG (remember we
     # always reshape the last dimensions), and then make h be E x K x G x F and
     # reshape it to EKG x F, and then multiply
-    y = torch.matmul(z.permute(0, 4, 1, 2, 3).reshape([B, N, E*K*G]),
-                     h.reshape([F, E*K*G]).permute(1, 0)).permute(0, 2, 1)
+    y = torch.matmul(z.permute(0, 4, 1, 2, 3).reshape([B, N, E * K * G]),
+                     h.reshape([F, E * K * G]).permute(1, 0)).permute(0, 2, 1)
     # And permute againt to bring it from B x N x F to B x F x N.
     # Finally, add the bias
     if b is not None:
         y = y + b
     return y
+
 
 def spectralGF(h, V, VH, x, b=None):
     """
@@ -212,41 +214,42 @@ def spectralGF(h, V, VH, x, b=None):
     # We will multiply separate VH with x, and V with diag(h).
     # First, to multiply VH with x, we need to add one dimension for each one
     # of them (dimension E for x and dimension B for VH)
-    x = x.reshape([B, 1, G, N]).permute(0, 1, 3, 2) # B x 1 x N x G
-    VH = VH.reshape([1, E, N, N]) # 1 x E x N x N
+    x = x.reshape([B, 1, G, N]).permute(0, 1, 3, 2)  # B x 1 x N x G
+    VH = VH.reshape([1, E, N, N])  # 1 x E x N x N
     # Now we multiply. Note that we also permute to make it B x E x G x N 
     # instead of B x E x N x G because we want to multiply for a specific e and 
     # g, there we do not want to sum (yet) over G.
-    VHx = torch.matmul(VH, x).permute(0, 1, 3, 2) # B x E x G x N
-    
+    VHx = torch.matmul(VH, x).permute(0, 1, 3, 2)  # B x E x G x N
+
     # Now we want to multiply V * diag(h), both are matrices. So first, we
     # add the necessary dimensions (B and G for V and an extra N for h to make
     # it a matrix from a vector)
-    V = V.reshape([1, E, 1, N, N]) # 1 x E x 1 x N x N
+    V = V.reshape([1, E, 1, N, N])  # 1 x E x 1 x N x N
     # We note that multiplying by a diagonal matrix to the right is equivalent
     # to an elementwise multiplication in which each column is multiplied by
     # a different number, so we will do this to make it faster (elementwise
     # multiplication is faster than matrix multiplication). We need to repeat
     # the vector we have columnwise.
-    diagh = h.reshape([F, E, G, 1, N]).repeat(1, 1, 1, N, 1) # F x E x G x N x N
+    diagh = h.reshape([F, E, G, 1, N]).repeat(1, 1, 1, N, 1)  # F x E x G x N x N
     # And now we do elementwise multiplication
-    Vdiagh = V * diagh # F x E x G x N x N
+    Vdiagh = V * diagh  # F x E x G x N x N
     # Finally, we make the multiplication of these two matrices. First, we add
     # the corresponding dimensions
-    Vdiagh = Vdiagh.reshape([1, F, E, G, N, N]) # 1 x F x E x G x N x N
-    VHx = VHx.reshape([B, 1, E, G, N, 1]) # B x 1 x E x G x N x 1
+    Vdiagh = Vdiagh.reshape([1, F, E, G, N, N])  # 1 x F x E x G x N x N
+    VHx = VHx.reshape([B, 1, E, G, N, 1])  # B x 1 x E x G x N x 1
     # And do matrix multiplication to get all the corresponding B,F,E,G vectors
-    VdiaghVHx = torch.matmul(Vdiagh, VHx) # B x F x E x G x N x 1
+    VdiaghVHx = torch.matmul(Vdiagh, VHx)  # B x F x E x G x N x 1
     # Get rid of the last dimension which we do not need anymore
-    y = VdiaghVHx.squeeze(5) # B x F x E x G x N
+    y = VdiaghVHx.squeeze(5)  # B x F x E x G x N
     # Sum over G
-    y = torch.sum(y, dim = 3) # B x F x E x N
+    y = torch.sum(y, dim=3)  # B x F x E x N
     # Sum over E
-    y = torch.sum(y, dim = 2) # B x F x N
+    y = torch.sum(y, dim=2)  # B x F x N
     # Finally, add the bias
     if b is not None:
         y = y + b
     return y
+
 
 def NVGF(h, S, x, b=None):
     """
@@ -317,14 +320,14 @@ def NVGF(h, S, x, b=None):
     # For this, we first add the corresponding dimensions
     xr = x.reshape([B, 1, G, N])
     Sr = S.reshape([1, E, N, N])
-    z = xr.reshape([B, 1, 1, G, N]).repeat(1, E, 1, 1, 1) # This is for k = 0
+    z = xr.reshape([B, 1, 1, G, N]).repeat(1, E, 1, 1, 1)  # This is for k = 0
     # We need to repeat along the E dimension, because for k=0, S_{e} = I for
     # all e, and therefore, the same signal values have to be used along all
     # edge feature dimensions.
-    for k in range(1,K):
-        xr = torch.matmul(xr, Sr) # B x E x G x N
-        xS = xr.reshape([B, E, 1, G, N]) # B x E x 1 x G x N
-        z = torch.cat((z, xS), dim = 2) # B x E x k x G x N
+    for k in range(1, K):
+        xr = torch.matmul(xr, Sr)  # B x E x G x N
+        xS = xr.reshape([B, E, 1, G, N])  # B x E x 1 x G x N
+        z = torch.cat((z, xS), dim=2)  # B x E x k x G x N
     # This output z is of size B x E x K x G x N
     # Now we have the x*S_{e}^{k} product, and we need to multiply with the
     # filter taps.
@@ -336,13 +339,14 @@ def NVGF(h, S, x, b=None):
     # Now let's do elementwise multiplication
     zh = z * h
     # And sum over the dimensions E, K, G to get B x F x N
-    y = torch.sum(zh, dim = 4) # Sum over G
-    y = torch.sum(y, dim = 3) # Sum over K
-    y = torch.sum(y, dim = 2) # Sum over E
+    y = torch.sum(zh, dim=4)  # Sum over G
+    y = torch.sum(y, dim=3)  # Sum over K
+    y = torch.sum(y, dim=2)  # Sum over E
     # Finally, add the bias
     if b is not None:
         y = y + b
     return y
+
 
 def EVGF(S, x, b=None):
     """
@@ -417,33 +421,34 @@ def EVGF(S, x, b=None):
     Sk = torch.index_select(S, 2, torch.tensor(0).to(S.device)).squeeze(2)
     # Sk in F x E x G x N x N
     # And we add one further dimension for the batch size B
-    Sk = Sk.unsqueeze(0) # 1 x F x E x G x N x N
+    Sk = Sk.unsqueeze(0)  # 1 x F x E x G x N x N
     # Matrix multiplication
-    x = torch.matmul(Sk, x) # B x F x E x G x N x 1
+    x = torch.matmul(Sk, x)  # B x F x E x G x N x 1
     # And we collect this for every k in a vector z, along the K dimension
-    z = x.reshape([B, F, E, 1, G, N, 1]).squeeze(6) # B x F x E x 1 x G x N
+    z = x.reshape([B, F, E, 1, G, N, 1]).squeeze(6)  # B x F x E x 1 x G x N
     # Now we do all the matrix multiplication
-    for k in range(1,K):
+    for k in range(1, K):
         # Extract the following k
         Sk = torch.index_select(S, 2, torch.tensor(k).to(S.device)).squeeze(2)
         # Sk in F x E x G x N x N
         # Give space for the batch dimension B
-        Sk = Sk.unsqueeze(0) # 1 x F x E x G x N x N
+        Sk = Sk.unsqueeze(0)  # 1 x F x E x G x N x N
         # Multiply with the previously cumulative Sk * x
-        x = torch.matmul(Sk, x) # B x F x E x G x N x 1
+        x = torch.matmul(Sk, x)  # B x F x E x G x N x 1
         # Get rid of the last dimension (of a column vector)
-        Sx = x.reshape([B, F, E, 1, G, N, 1]).squeeze(6) # B x F x E x 1 x G x N
+        Sx = x.reshape([B, F, E, 1, G, N, 1]).squeeze(6)  # B x F x E x 1 x G x N
         # Add to the z
-        z = torch.cat((z, Sx), dim = 2) # B x F x E x k x G x N
+        z = torch.cat((z, Sx), dim=2)  # B x F x E x k x G x N
     # Sum over G
-    z = torch.sum(z, dim = 4)
+    z = torch.sum(z, dim=4)
     # Sum over K
-    z = torch.sum(z, dim = 3)
+    z = torch.sum(z, dim=3)
     # Sum over E
-    y = torch.sum(z, dim = 2)
+    y = torch.sum(z, dim=2)
     if b is not None:
         y = y + b
     return y
+
 
 class NoPool(nn.Module):
     """
@@ -488,7 +493,6 @@ class NoPool(nn.Module):
     """
 
     def __init__(self, nInputNodes, nOutputNodes):
-
         super().__init__()
         assert nInputNodes == nOutputNodes
         self.nInputNodes = nInputNodes
@@ -516,6 +520,7 @@ class NoPool(nn.Module):
                                                   self.nOutputNodes)
         reprString += "no neighborhood needed"
         return reprString
+
 
 class MaxPoolLocal(nn.Module):
     """
@@ -612,22 +617,22 @@ class MaxPoolLocal(nn.Module):
         # 0 of the last column. For these values to be the appropriate ones, we
         # have to repeat x as columns to build our b x F x N x maxNeighbor
         # matrix.
-        x = x.unsqueeze(3) # B x F x N x 1
-        x = x.repeat([1, 1, 1, self.maxNeighborhoodSize]) # BxFxNxmaxNeighbor
+        x = x.unsqueeze(3)  # B x F x N x 1
+        x = x.repeat([1, 1, 1, self.maxNeighborhoodSize])  # BxFxNxmaxNeighbor
         # And the neighbors that we need to gather are the same across the batch
         # and feature dimensions, so we need to repeat the matrix along those
         # dimensions
         gatherNeighbor = self.neighborhood.reshape([1, 1,
                                                     self.nOutputNodes,
                                                     self.maxNeighborhoodSize])
-        gatherNeighbor = gatherNeighbor.repeat([batchSize, dimNodeSignals, 1,1])
+        gatherNeighbor = gatherNeighbor.repeat([batchSize, dimNodeSignals, 1, 1])
         # And finally we're in position of getting all the neighbors in line
         xNeighbors = torch.gather(x, 2, gatherNeighbor)
         #   B x F x nOutput x maxNeighbor
         # Note that this gather function already reduces the dimension to
         # nOutputNodes.
         # And proceed to compute the maximum along this dimension
-        v, _ = torch.max(xNeighbors, dim = 3)
+        v, _ = torch.max(xNeighbors, dim=3)
         return v
 
     def extra_repr(self):
@@ -638,6 +643,7 @@ class MaxPoolLocal(nn.Module):
         else:
             reprString += "NO neighborhood stored"
         return reprString
+
 
 class GraphFilter(nn.Module):
     """
@@ -689,7 +695,7 @@ class GraphFilter(nn.Module):
                 batch_size x out_features x number_nodes
     """
 
-    def __init__(self, G, F, K, E = 1, bias = True):
+    def __init__(self, G, F, K, E=1, bias=True):
         # K: Number of filter taps
         # GSOs will be added later.
         # This combines both weight scalars and weight vectors.
@@ -702,7 +708,7 @@ class GraphFilter(nn.Module):
         self.F = F
         self.K = K
         self.E = E
-        self.S = None # No GSO assigned yet
+        self.S = None  # No GSO assigned yet
         # Create parameters:
         self.weight = nn.parameter.Parameter(torch.Tensor(F, E, K, G))
         if bias:
@@ -736,9 +742,9 @@ class GraphFilter(nn.Module):
         # And now we add the zero padding
         if Nin < self.N:
             x = torch.cat((x,
-                           torch.zeros(B, F, self.N-Nin)\
-                                   .type(x.dtype).to(x.device)
-                          ), dim = 2)
+                           torch.zeros(B, F, self.N - Nin) \
+                           .type(x.dtype).to(x.device)
+                           ), dim=2)
         # Compute the filter output
         u = LSIGF(self.weight, self.S, x, self.bias)
         # So far, u is of shape batchSize x dimOutFeatures x numberNodes
@@ -751,15 +757,16 @@ class GraphFilter(nn.Module):
 
     def extra_repr(self):
         reprString = "in_features=%d, out_features=%d, " % (
-                        self.G, self.F) + "filter_taps=%d, " % (
-                        self.K) + "edge_features=%d, " % (self.E) +\
-                        "bias=%s, " % (self.bias is not None)
+            self.G, self.F) + "filter_taps=%d, " % (
+                         self.K) + "edge_features=%d, " % (self.E) + \
+                     "bias=%s, " % (self.bias is not None)
         if self.S is not None:
             reprString += "GSO stored"
         else:
             reprString += "no GSO stored"
         return reprString
-    
+
+
 class SpectralGF(nn.Module):
     """
     SpectralGF Creates a (linear) layer that applies a LSI graph filter in the
@@ -811,7 +818,7 @@ class SpectralGF(nn.Module):
                 batch_size x out_features x number_nodes
     """
 
-    def __init__(self, G, F, M, E = 1, bias = True):
+    def __init__(self, G, F, M, E=1, bias=True):
         # GSOs will be added later.
         # Bias will always be shared and scalar.
 
@@ -822,7 +829,7 @@ class SpectralGF(nn.Module):
         self.F = F
         self.M = M
         self.E = E
-        self.S = None # No GSO assigned yet
+        self.S = None  # No GSO assigned yet
         # Create parameters:
         self.weight = nn.parameter.Parameter(torch.Tensor(F, E, G, M))
         if bias:
@@ -846,7 +853,7 @@ class SpectralGF(nn.Module):
         assert S.shape[0] == self.E
         self.N = S.shape[1]
         assert S.shape[2] == self.N
-        self.S = S # Save S
+        self.S = S  # Save S
         # Now we need to compute the eigendecomposition and save it
         # To compute the eigendecomposition, we use numpy.
         # So, first, get S in numpy format.
@@ -861,18 +868,18 @@ class SpectralGF(nn.Module):
         splineKernel = np.zeros([self.E, self.N, self.M])
         for e in range(self.E):
             # Compute the eigendecomposition
-            Lambda[e,:], V[e,:,:] = np.linalg.eig(Snp[e,:,:])
+            Lambda[e, :], V[e, :, :] = np.linalg.eig(Snp[e, :, :])
             # Compute the hermitian
-            VH[e,:,:] = V[e,:,:].conj().T
+            VH[e, :, :] = V[e, :, :].conj().T
             # Compute the splineKernel basis matrix
-            splineKernel[e,:,:] = graphTools.splineBasis(self.M, Lambda[e,:])
+            splineKernel[e, :, :] = graphTools.splineBasis(self.M, Lambda[e, :])
         # Transform everything to tensors of appropriate type on appropriate
         # device, and store them.
-        self.V = torch.tensor(V).type(S.dtype).to(S.device) # E x N x N
-        self.VH = torch.tensor(VH).type(S.dtype).to(S.device) # E x N x N
-        self.splineKernel = torch.tensor(splineKernel)\
-                                .type(S.dtype).to(S.device)
-            # E x N x M
+        self.V = torch.tensor(V).type(S.dtype).to(S.device)  # E x N x N
+        self.VH = torch.tensor(VH).type(S.dtype).to(S.device)  # E x N x N
+        self.splineKernel = torch.tensor(splineKernel) \
+            .type(S.dtype).to(S.device)
+        # E x N x M
         # Once we have computed the splineKernel, we do not need to save the
         # eigenvalues.
 
@@ -881,24 +888,24 @@ class SpectralGF(nn.Module):
         B = x.shape[0]
         F = x.shape[1]
         Nin = x.shape[2]
-        
+
         # Check if we have enough spectral filter coefficients as needed, or if
         # we need to fill out the rest using the spline kernel.
         if self.M == self.N:
-            self.h = self.weight # F x E x G x N (because N = M)
+            self.h = self.weight  # F x E x G x N (because N = M)
         else:
             # Adjust dimensions for proper algebraic matrix multiplication
-            splineKernel = self.splineKernel.reshape([1,self.E,self.N,self.M])
+            splineKernel = self.splineKernel.reshape([1, self.E, self.N, self.M])
             # We will multiply a 1 x E x N x M matrix with a F x E x M x G
             # matrix to get the proper F x E x N x G coefficients
-            self.h = torch.matmul(splineKernel, self.weight.permute(0,1,3,2))
+            self.h = torch.matmul(splineKernel, self.weight.permute(0, 1, 3, 2))
             # And now we rearrange it to the same shape that the function takes
-            self.h = self.h.permute(0,1,3,2) # F x E x G x N
+            self.h = self.h.permute(0, 1, 3, 2)  # F x E x G x N
         # And now we add the zero padding (if this comes from a pooling
         # operation)
         if Nin < self.N:
-            zeroPad = torch.zeros(B, F, self.N-Nin).type(x.dtype).to(x.device)
-            x = torch.cat((x, zeroPad), dim = 2)
+            zeroPad = torch.zeros(B, F, self.N - Nin).type(x.dtype).to(x.device)
+            x = torch.cat((x, zeroPad), dim=2)
         # Compute the filter output
         u = spectralGF(self.h, self.V, self.VH, x, self.bias)
         # So far, u is of shape batchSize x dimOutFeatures x numberNodes
@@ -911,14 +918,15 @@ class SpectralGF(nn.Module):
 
     def extra_repr(self):
         reprString = "in_features=%d, out_features=%d, " % (
-                        self.G, self.F) + "filter_taps=%d, " % (
-                        self.K) + "edge_features=%d, " % (self.E) +\
-                        "bias=%s, " % (self.bias is not None)
+            self.G, self.F) + "filter_taps=%d, " % (
+                         self.K) + "edge_features=%d, " % (self.E) + \
+                     "bias=%s, " % (self.bias is not None)
         if self.S is not None:
             reprString += "GSO stored"
         else:
             reprString += "no GSO stored"
         return reprString
+
 
 class NodeVariantGF(nn.Module):
     """
@@ -972,7 +980,7 @@ class NodeVariantGF(nn.Module):
                 batch_size x out_features x number_nodes
     """
 
-    def __init__(self, G, F, K, M, E = 1, bias = True):
+    def __init__(self, G, F, K, M, E=1, bias=True):
         # G: Number of input features
         # F: Number of output features
         # K: Number of filter shift taps
@@ -988,7 +996,7 @@ class NodeVariantGF(nn.Module):
         self.K = K
         self.M = M
         self.E = E
-        self.S = None # No GSO assigned yet
+        self.S = None  # No GSO assigned yet
         # Create parameters:
         self.weight = nn.parameter.Parameter(torch.Tensor(F, E, K, G, M))
         if bias:
@@ -1013,7 +1021,7 @@ class NodeVariantGF(nn.Module):
         self.N = S.shape[1]
         assert S.shape[2] == self.N
         self.S = S
-        npS = np.array(S.data.cpu()) # Save the GSO as a numpy array because we
+        npS = np.array(S.data.cpu())  # Save the GSO as a numpy array because we
         # are going to compute the neighbors.
         # And now we have to fill up the parameter vector, from M to N
         if self.M < self.N:
@@ -1029,20 +1037,20 @@ class NodeVariantGF(nn.Module):
             # (which, due to the ordering, is the most important node of all
             # the available ones)
             neighborList = graphTools.computeNeighborhood(npS, 1,
-                                                          nb = self.M)
+                                                          nb=self.M)
             # This gets the list of 1-hop neighbors for all nodes.
             # Find the nodes that have no neighbors
             nodesWithNoNeighbors = [n for n in range(self.N) \
-                                                   if len(neighborList[n]) == 0]
+                                    if len(neighborList[n]) == 0]
             # If there are still nodes that didn't find a neighbor
-            K = 1 # K-hop neighbor we have looked so far
+            K = 1  # K-hop neighbor we have looked so far
             while len(nodesWithNoNeighbors) > 0:
                 # Looks for the next hop
                 K += 1
                 # Get the neigbors one further hop away
                 thisNeighborList = graphTools.computeNeighborhood(npS,
                                                                   K,
-                                                                  nb = self.M)
+                                                                  nb=self.M)
                 # Check if we now have neighbors for those that didn't have
                 # before
                 for n in nodesWithNoNeighbors:
@@ -1054,7 +1062,7 @@ class NodeVariantGF(nn.Module):
                         neighborList[n] = thisNodeList
                 # Recheck if all nodes have non-empty neighbors
                 nodesWithNoNeighbors = [n for n in range(self.N) \
-                                                   if len(neighborList[n]) == 0]
+                                        if len(neighborList[n]) == 0]
             # Now we have obtained the list of independent nodes connected to
             # all nodes, we keep the one with highest score. And since the
             # matrix is already properly ordered, this means keeping the
@@ -1091,8 +1099,8 @@ class NodeVariantGF(nn.Module):
             self.h = torch.index_select(self.weight, 4, self.copyNodes)
         # And now we add the zero padding
         if Nin < self.N:
-            zeroPad = torch.zeros(B, F, self.N-Nin).type(x.dtype).to(x.device)
-            x = torch.cat((x, zeroPad), dim = 2)
+            zeroPad = torch.zeros(B, F, self.N - Nin).type(x.dtype).to(x.device)
+            x = torch.cat((x, zeroPad), dim=2)
         # Compute the filter output
         u = NVGF(self.h, self.S, x, self.bias)
         # So far, u is of shape batchSize x dimOutFeatures x numberNodes
@@ -1105,15 +1113,16 @@ class NodeVariantGF(nn.Module):
 
     def extra_repr(self):
         reprString = "in_features=%d, out_features=%d, " % (
-                        self.G, self.F) + "shift_taps=%d, node_taps=%d, " % (
-                        self.K, self.M) + "edge_features=%d, " % (self.E) +\
-                        "bias=%s, " % (self.bias is not None)
+            self.G, self.F) + "shift_taps=%d, node_taps=%d, " % (
+                         self.K, self.M) + "edge_features=%d, " % (self.E) + \
+                     "bias=%s, " % (self.bias is not None)
         if self.S is not None:
             reprString += "GSO stored"
         else:
             reprString += "no GSO stored"
-        return reprString    
-    
+        return reprString
+
+
 class EdgeVariantGF(nn.Module):
     """
     EdgeVariantGF Creates a (linear) layer that applies an edge-variant graph
@@ -1177,7 +1186,8 @@ class EdgeVariantGF(nn.Module):
             y (torch.tensor): output; shape:
                 batch_size x out_features x number_nodes
     """
-    def __init__(self, G, F, K, N, E=1, bias = True):
+
+    def __init__(self, G, F, K, N, E=1, bias=True):
         # Initialize parent
         super().__init__()
         # Save parameters:
@@ -1209,10 +1219,10 @@ class EdgeVariantGF(nn.Module):
         assert S.shape[0] == self.E
         self.N = S.shape[1]
         assert S.shape[2] == self.N
-        self.S = S # Save the GSO
+        self.S = S  # Save the GSO
         # Get the identity matrix across all edge features
-        multipleIdentity = torch.eye(self.N).reshape([1, self.N, self.N])\
-                            .repeat(self.E, 1, 1).to(S.device)
+        multipleIdentity = torch.eye(self.N).reshape([1, self.N, self.N]) \
+            .repeat(self.E, 1, 1).to(S.device)
         # Compute the nonzero elements of S+I_{N}
         sparsityPattern = ((torch.abs(S) + multipleIdentity) > zeroTolerance)
         # Change from byte tensors to float tensors (or the same type of data as
@@ -1227,16 +1237,16 @@ class EdgeVariantGF(nn.Module):
         # The sparsity pattern has shape E x N x N. And we want to make it
         # 1 x E x K x 1 x N x N. The K dimension is to guarantee that for k=0
         # we have the identity
-        multipleIdentity = multipleIdentity\
-                                    .reshape([1, self.E, 1, 1, self.N, self.N])
+        multipleIdentity = multipleIdentity \
+            .reshape([1, self.E, 1, 1, self.N, self.N])
         # This gives a 1 x E x 1 x 1 x N x N identity matrix
-        sparsityPattern = sparsityPattern\
-                                    .reshape([1, self.E, 1, 1, self.N, self.N])
+        sparsityPattern = sparsityPattern \
+            .reshape([1, self.E, 1, 1, self.N, self.N])
         # This gives a 1 x E x 1 x 1 x N x N sparsity pattern matrix
-        sparsityPattern = sparsityPattern.repeat(1, 1, self.K-1, 1, 1, 1)
+        sparsityPattern = sparsityPattern.repeat(1, 1, self.K - 1, 1, 1, 1)
         # This repeats the sparsity pattern K-1 times giving a matrix of shape
         #   1 x E x (K-1) x 1 x N x N
-        sparsityPattern = torch.cat((multipleIdentity,sparsityPattern), dim = 2)
+        sparsityPattern = torch.cat((multipleIdentity, sparsityPattern), dim=2)
         # This sholud give me a 1 x E x K x 1 x N x N matrix with the identity
         # in the first element
         self.sparsityPatternFull = sparsityPattern.type(S.dtype).to(S.device)
@@ -1250,8 +1260,8 @@ class EdgeVariantGF(nn.Module):
         self.Phi = self.weight * self.sparsityPatternFull
         # And now we add the zero padding
         if Nin < self.N:
-            zeroPad = torch.zeros(B, F, self.N-Nin).type(x.dtype).to(x.device)
-            x = torch.cat((x, zeroPad), dim = 2)
+            zeroPad = torch.zeros(B, F, self.N - Nin).type(x.dtype).to(x.device)
+            x = torch.cat((x, zeroPad), dim=2)
         # Compute the filter output
         u = EVGF(self.Phi, x, self.bias)
         # So far, u is of shape batchSize x dimOutFeatures x numberNodes
@@ -1260,21 +1270,25 @@ class EdgeVariantGF(nn.Module):
         # since the nodes between numberNodesIn and numberNodes are not required
         if Nin < self.N:
             u = torch.index_select(u, 2, torch.arange(Nin).to(u.device))
-        return u                    
+        return u
+
+    def set_phi(self, phi):
+        self.Phi = phi
 
     def extra_repr(self):
         reprString = "in_features=%d, out_features=%d, " % (
-                        self.G, self.F) + "shift_taps=%d, " % (
-                        self.K) + \
-                        "node_taps=%d, " % (self.N) +\
-                        "edge_features=%d, " % (self.E) +\
-                        "bias=%s, " % (self.bias is not None)
+            self.G, self.F) + "shift_taps=%d, " % (
+                         self.K) + \
+                     "node_taps=%d, " % (self.N) + \
+                     "edge_features=%d, " % (self.E) + \
+                     "bias=%s, " % (self.bias is not None)
         if self.S is not None:
             reprString += "GSO stored"
         else:
             reprString += "no GSO stored"
         return reprString
-    
+
+
 class HybridEdgeVariantGF(nn.Module):
     """
     HybridEdgeVariantGF Creates a (linear) layer that applies a hybrid 
@@ -1336,7 +1350,8 @@ class HybridEdgeVariantGF(nn.Module):
             y (torch.tensor): output; shape:
                 batch_size x out_features x number_nodes
     """
-    def __init__(self, G, F, K, M, N, E=1, bias = True):
+
+    def __init__(self, G, F, K, M, N, E=1, bias=True):
         # Initialize parent
         super().__init__()
         # Save parameters:
@@ -1344,8 +1359,8 @@ class HybridEdgeVariantGF(nn.Module):
         self.F = F
         self.K = K
         self.E = E
-        self.M = M # Number of selected nodes
-        self.N = N # Total number of nodes
+        self.M = M  # Number of selected nodes
+        self.N = N  # Total number of nodes
         # Create parameters:
         self.weightEV = nn.parameter.Parameter(torch.Tensor(F, E, K, G, N, N))
         self.weightLSI = nn.parameter.Parameter(torch.Tensor(F, E, K, G))
@@ -1371,10 +1386,10 @@ class HybridEdgeVariantGF(nn.Module):
         assert S.shape[0] == self.E
         self.N = S.shape[1]
         assert S.shape[2] == self.N
-        self.S = S # Save the GSO
+        self.S = S  # Save the GSO
         # Get the identity matrix across all edge features
-        multipleIdentity = torch.eye(self.N).reshape([1, self.N, self.N])\
-                            .repeat(self.E, 1, 1).to(S.device)
+        multipleIdentity = torch.eye(self.N).reshape([1, self.N, self.N]) \
+            .repeat(self.E, 1, 1).to(S.device)
         # Compute the nonzero elements of S+I_{N}
         sparsityPattern = ((torch.abs(S) + multipleIdentity) > zeroTolerance)
         # Change from byte tensors to float tensors (or the same type of data as
@@ -1390,14 +1405,14 @@ class HybridEdgeVariantGF(nn.Module):
             # Create the zeros
             hybridMaskZeros = torch.zeros([self.N - self.M, self.N - self.M])
             # Concatenate the columns
-            hybridMask = torch.cat((hybridMaskOnesCols,hybridMaskZeros), dim=1)
+            hybridMask = torch.cat((hybridMaskOnesCols, hybridMaskZeros), dim=1)
             # Concatenate the rows
-            hybridMask = torch.cat((hybridMaskOnesRows,hybridMask), dim=0)
+            hybridMask = torch.cat((hybridMaskOnesRows, hybridMask), dim=0)
         else:
             hybridMask = torch.ones([self.N, self.N])
         # Now that we have the hybrid mask, we need to mask the sparsityPattern
         # we got so far
-        hybridMask = hybridMask.reshape([1, self.N, self.N]).to(S.device) 
+        hybridMask = hybridMask.reshape([1, self.N, self.N]).to(S.device)
         #   1 x N x N
         sparsityPattern = sparsityPattern * hybridMask
         self.sparsityPattern = sparsityPattern.to(S.device)
@@ -1409,16 +1424,16 @@ class HybridEdgeVariantGF(nn.Module):
         # The sparsity pattern has shape E x N x N. And we want to make it
         # 1 x E x K x 1 x N x N. The K dimension is to guarantee that for k=0
         # we have the identity
-        multipleIdentity = (multipleIdentity * hybridMask)\
-                                    .reshape([1, self.E, 1, 1, self.N, self.N])
+        multipleIdentity = (multipleIdentity * hybridMask) \
+            .reshape([1, self.E, 1, 1, self.N, self.N])
         # This gives a 1 x E x 1 x 1 x N x N identity matrix
-        sparsityPattern = sparsityPattern\
-                                    .reshape([1, self.E, 1, 1, self.N, self.N])
+        sparsityPattern = sparsityPattern \
+            .reshape([1, self.E, 1, 1, self.N, self.N])
         # This gives a 1 x E x 1 x 1 x N x N sparsity pattern matrix
-        sparsityPattern = sparsityPattern.repeat(1, 1, self.K-1, 1, 1, 1)
+        sparsityPattern = sparsityPattern.repeat(1, 1, self.K - 1, 1, 1, 1)
         # This repeats the sparsity pattern K-1 times giving a matrix of shape
         #   1 x E x (K-1) x 1 x N x N
-        sparsityPattern = torch.cat((multipleIdentity,sparsityPattern), dim = 2)
+        sparsityPattern = torch.cat((multipleIdentity, sparsityPattern), dim=2)
         # This sholud give me a 1 x E x K x 1 x N x N matrix with the identity
         # in the first element
         self.sparsityPatternFull = sparsityPattern.type(S.dtype).to(S.device)
@@ -1432,8 +1447,8 @@ class HybridEdgeVariantGF(nn.Module):
         self.Phi = self.weightEV * self.sparsityPatternFull
         # And now we add the zero padding
         if Nin < self.N:
-            zeroPad = torch.zeros(B, F, self.N-Nin).type(x.dtype).to(x.device)
-            x = torch.cat((x, zeroPad), dim = 2)
+            zeroPad = torch.zeros(B, F, self.N - Nin).type(x.dtype).to(x.device)
+            x = torch.cat((x, zeroPad), dim=2)
         # Compute the filter output for the EV part
         uEV = EVGF(self.Phi, x, self.bias)
         # Compute the filter output for the LSI part
@@ -1446,16 +1461,16 @@ class HybridEdgeVariantGF(nn.Module):
         # since the nodes between numberNodesIn and numberNodes are not required
         if Nin < self.N:
             u = torch.index_select(u, 2, torch.arange(Nin).to(u.device))
-        return u                    
+        return u
 
     def extra_repr(self):
         reprString = "in_features=%d, out_features=%d, " % (
-                        self.G, self.F) + "shift_taps=%d, " % (
-                        self.K) + \
-                        "selected_nodes=%d, " % (self.M) +\
-                        "number_nodes=%d, " % (self.N) +\
-                        "edge_features=%d, " % (self.E) +\
-                        "bias=%s, " % (self.bias is not None)
+            self.G, self.F) + "shift_taps=%d, " % (
+                         self.K) + \
+                     "selected_nodes=%d, " % (self.M) + \
+                     "number_nodes=%d, " % (self.N) + \
+                     "edge_features=%d, " % (self.E) + \
+                     "bias=%s, " % (self.bias is not None)
         if self.S is not None:
             reprString += "GSO stored"
         else:
