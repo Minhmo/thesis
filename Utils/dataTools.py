@@ -151,6 +151,50 @@ class _dataForClassification:
         return accuracy
 
 
+def changeDataType(x, dataType):
+    """
+    changeDataType(x, dataType): change the dataType of variable x into dataType
+    """
+
+    # So this is the thing: To change data type it depends on both, what dtype
+    # the variable already is, and what dtype we want to make it.
+    # Torch changes type by .type(), but numpy by .astype()
+    # If we have already a torch defined, and we apply a torch.tensor() to it,
+    # then there will be warnings because of gradient accounting.
+
+    # All of these facts make changing types considerably cumbersome. So we
+    # create a function that just changes type and handles all this issues
+    # inside.
+
+    # If we can't recognize the type, we just make everything numpy.
+
+    # Check if the variable has an argument called 'dtype' so that we can now
+    # what type of data type the variable is
+    if 'dtype' in dir(x):
+        varType = x.dtype
+
+    # So, let's start assuming we want to convert to numpy
+    if 'numpy' in repr(dataType):
+        # Then, the variable con be torch, in which case we move it to cpu, to
+        # numpy, and convert it to the right type.
+        if 'torch' in repr(varType):
+            x = x.cpu().numpy().astype(dataType)
+        # Or it could be numpy, in which case we just use .astype
+        elif 'numpy' in repr(type(x)):
+            x = x.astype(dataType)
+    # Now, we want to convert to torch
+    elif 'torch' in repr(dataType):
+        # If the variable is torch in itself
+        if 'torch' in repr(varType):
+            x = x.type(dataType)
+        # But, if it's numpy
+        elif 'numpy' in repr(type(x)):
+            x = torch.tensor(x, dtype=dataType)
+
+    # This only converts between numpy and torch. Any other thing is ignored
+    return x
+
+
 class SourceLocalization(_dataForClassification):
     """
     SourceLocalization: Creates the dataset for a source localization problem
@@ -834,7 +878,7 @@ class AutorshipGender(_dataForClassification):
         return sum([i['wordFreq'].shape[0] for k, i in self.authorData.items() if k in self.women]) * 2
 
     def get_split_same_author(self):
-        self.get_split(self.authorName, self.ratioTrain, self.ratioValid)
+        self.get_split(self.ratioTrain, self.ratioValid)
 
     def init_author_indices(self):
         for key in self.authorData.keys():

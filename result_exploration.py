@@ -26,9 +26,11 @@ sns.set_palette('muted')
 #                 rc={"lines.linewidth": 2.5})
 RS = 123
 
-
 # %%##################################################################
 # Function for summarizing training results.
+all_author_names = ['abbott', 'stevenson', 'alcott', 'alger', 'allen', 'austen', 'bronte', 'cooper', 'dickens',
+                    'garland', 'hawthorne', 'james', 'melville', 'page', 'thoreau', 'twain', 'doyle', 'irving', 'poe',
+                    'jewett', 'wharton']
 
 
 def summarize_training_results(train_result):
@@ -80,6 +82,34 @@ def analyse_GNN_results(train_result):
     return best_acc, best_comb, std
 
 
+def analyse_GNN_results_extra(train_result):
+    means_acc = []
+    means_f1 = []
+    means_auc = []
+    stds = []
+
+    for comb in train_result.keys():
+        mean_acc = np.mean(train_result[comb]['acc'])
+        mean_f1 = np.mean(train_result[comb]['f1'])
+        mean_auc = np.mean(train_result[comb]['auc'])
+        std = np.std(train_result[comb]['acc'])
+
+        means_acc.append(mean_acc)
+        means_f1.append(mean_f1)
+        means_auc.append(mean_auc)
+        stds.append(std)
+
+    best_acc = max(means_acc)
+    best_f1 = max(means_f1)
+    best_auc = max(means_auc)
+
+    index_of_best = means_acc.index(best_acc)
+    std = stds[index_of_best]
+    best_comb = list(train_result.keys())[index_of_best]
+
+    return best_acc, best_comb, std, best_f1, best_auc
+
+
 def prepare_for_training(data, order):
     data = torch.from_numpy(data).double()
 
@@ -116,6 +146,23 @@ def fashion_scatter(x, colors):
         txts.append(txt)
 
     return f, ax, sc, txts
+
+
+def analyze_linear_results(json):
+    results = {}
+
+    for author in all_author_names:
+        temp = json[author]
+
+        if isinstance(temp, dict):
+            means_knn = [np.mean(v) for k, v in temp.items()]
+            max_acc = np.max(means_knn)
+        else:
+            max_acc = np.max(temp)
+
+        results[author] = max_acc
+
+    return results
 
 
 # %%##################################################################
@@ -165,17 +212,8 @@ svm_file = open('results/svm_results.txt', 'r')
 knn_search_results = json.load(knn_file)
 svm_search_results = json.load(svm_file)
 
-knn_results = {}
-svm_results = {}
-
-for author in all_author_names:
-    temp = knn_search_results[author]
-
-    means_knn = [np.mean(v) for k, v in temp.items()]
-    max_acc = np.max(means_knn)
-
-    knn_results[author] = max_acc
-    svm_results[author] = np.mean(svm_search_results[author])
+knn_results = analyze_linear_results(knn_search_results)
+svm_results = analyze_linear_results(svm_search_results)
 
 knn_file.close()
 svm_file.close()
@@ -208,7 +246,7 @@ all_author_names = ['abbott', 'stevenson', 'alcott', 'alger', 'allen', 'austen',
                     'jewett', 'wharton']
 
 FILE_NAME_NATIONALITY = 'GNN_Polynomial_nationality_results_20200310112333.txt'
-FILE_NAME_GENDER = 'GNN_Polynomial_gender_results_20200309105949.txt'
+FILE_NAME_GENDER = 'results/gender/GNN_Polynomial_gender_results_20200312161323.txt'
 
 with open(FILE_NAME_NATIONALITY, 'r') as f:
     train_result = json.load(f)
@@ -219,10 +257,36 @@ with open(FILE_NAME_NATIONALITY, 'r') as f:
 
 with open(FILE_NAME_GENDER, 'r') as f:
     train_result = json.load(f)
-    gender_results = {'acc': np.mean(train_result['(16, 1)']['acc']),
-                      'f1': np.mean(train_result['(16, 1)']['f1']),
-                      'auc': np.mean(train_result['(16, 1)']['auc']),
-                      "std": np.std(train_result['(16, 1)']['acc'])}
+
+    means_acc = []
+    means_f1 = []
+    means_auc = []
+    stds = []
+
+    for comb in train_result.keys():
+        mean_acc = np.mean(train_result[comb]['acc'])
+        mean_f1 = np.mean(train_result[comb]['f1'])
+        mean_auc = np.mean(train_result[comb]['auc'])
+        std = np.std(train_result[comb]['acc'])
+
+        means_acc.append(mean_acc)
+        means_f1.append(mean_f1)
+        means_auc.append(mean_auc)
+        stds.append(std)
+
+    best_acc = max(means_acc)
+    best_f1 = max(means_f1)
+    best_auc = max(means_auc)
+
+    index_of_best = means_acc.index(best_acc)
+    std = stds[index_of_best]
+    best_comb = list(train_result.keys())[index_of_best]
+
+    gender_results = {'best_acc': best_acc,
+                      'best_f1': best_f1,
+                      'best_auc': best_auc,
+                      'best_comb': best_comb,
+                      'std': std}
 
 # %%##################################################################
 # Anaylse results from using Phi matrix as a Shift operator
@@ -815,3 +879,46 @@ with open('GNN_Polynomial_phi_non_zero_results_poe.txt', 'r') as f:
 
     bx = sns.relplot(x="acc", y="non zero", data=df_acc_non_zero)
     plt.show()
+
+# %%##################################################################
+# Gender classification result exploration
+
+GENDER_EDGE = 'results/gender/EdgeVariGNN_Gender_results_20200316165853.txt'
+GENDER_GCNN_2L = 'results/gender/2_layer_GNN_Polynomial_gender_results_20200316125137.txt'
+GENDER_GCNN = 'results/gender/GNN_Polynomial_gender_results_20200312161323.txt'
+GENDER_LINEAR_KNN = 'results/gender/knn_results_gender.txt'
+GENDER_LINEAR_SVM = 'results/gender/svm_results_gender.txt'
+df_gender_comparison = pd.DataFrame(index=['best_acc', 'best_comb', 'std', 'best_f1', 'best_auc'])
+
+with open(GENDER_EDGE, 'r') as f:
+    train_result = json.load(f)
+    best_acc, best_comb, std, best_f1, best_auc = analyse_GNN_results_extra(train_result)
+    result = {'best_acc': best_acc, 'best_comb': best_comb, 'std': std, 'best_f1': best_f1, 'best_auc': best_auc}
+    df_gender_comparison['Edge_net'] = list(result.values())
+
+with open(GENDER_GCNN_2L, 'r') as f:
+    train_result = json.load(f)
+    best_acc, best_comb, std, best_f1, best_auc = analyse_GNN_results_extra(train_result)
+    result = {'best_acc': best_acc, 'best_comb': best_comb, 'std': std, 'best_f1': best_f1, 'best_auc': best_auc}
+    df_gender_comparison['GCNN_2_layers'] = list(result.values())
+
+with open(GENDER_GCNN, 'r') as f:
+    train_result = json.load(f)
+    best_acc, best_comb, std, best_f1, best_auc = analyse_GNN_results_extra(train_result)
+    result = {'best_acc': best_acc, 'best_comb': best_comb, 'std': std, 'best_f1': best_f1, 'best_auc': best_auc}
+    df_gender_comparison['GCNN'] = list(result.values())
+
+with open(GENDER_LINEAR_KNN, 'r') as f:
+    train_result = json.load(f)
+    result = analyze_linear_results(train_result)
+    result = {'best_acc': result['abbott'], 'best_comb': '', 'std': '', 'best_f1': '', 'best_auc': ''}
+    df_gender_comparison['GENDER_LINEAR_KNN'] = list(result.values())
+
+with open(GENDER_LINEAR_SVM, 'r') as f:
+    train_result = json.load(f)
+    result = analyze_linear_results(train_result)
+    result = {'best_acc': result['abbott'], 'best_comb': '', 'std': '', 'best_f1': '', 'best_auc': ''}
+    df_gender_comparison['GENDER_LINEAR_SVM'] = list(result.values())
+
+# create a dataframe with info from GCNN and FF2
+# df_gender_comparison = df_gender_comparison.T

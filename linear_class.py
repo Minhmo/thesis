@@ -73,13 +73,11 @@ def train_svm(data):
     return result
 
 
-def train_networks():
-    K = [3, 5, 8, 11, 13, 17]
+def train_networks(data, name=""):
+    K = [5]
     knn_search_results = {}
     svc_search_results = {}
     for author in all_author_names:
-        data = Utils.dataTools.Authorship(author, ratio_train, ratio_valid, dataPath)
-
         knn_search_results[author] = {}
 
         # train KNN
@@ -91,15 +89,15 @@ def train_networks():
         svc_search_results[author] = train_svm(data)
     # mean_svc = np.mean(svc_search_results)
     # means_knn = [np.mean(v) for k, v in knn_search_results.items()]
-    with open('knn_results.txt', 'w+') as outfile:
+    with open('knn_results_{}.txt'.format(name), 'w+') as outfile:
         json.dump(knn_search_results, outfile)
-    with open('svm_results.txt', 'w+') as outfile:
+    with open('svm_results_{}.txt'.format(name), 'w+') as outfile:
         json.dump(svc_search_results, outfile)
 
 
-def analyze_results():
-    knn_file = open('results/knn_results.txt', 'r')
-    svm_file = open('results/svm_results.txt', 'r')
+def analyze_results(name=''):
+    knn_file = open('results/knn_results_{}.txt'.format(name), 'r')
+    svm_file = open('results/svm_results_{}.txt'.format(name), 'r')
 
     knn_search_results = json.load(knn_file)
     svm_search_results = json.load(svm_file)
@@ -123,6 +121,7 @@ def analyze_results():
 
 
 if __name__ == '__main__':
-    # data = Utils.dataTools.Authorship('poe', ratio_train, ratio_valid, dataPath)
-    # train_networks()
-    svm_results, knn_results = analyze_results()
+    data = Utils.dataTools.AutorshipGender(ratio_train, ratio_valid, dataPath)
+
+    train_networks(data, name='gender')
+    svm_results, knn_results = analyze_results(name='gender')
