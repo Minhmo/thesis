@@ -71,7 +71,7 @@ from sklearn.metrics import roc_curve, auc
 import Utils.graphTools as graphTools
 import Utils.dataTools
 import Utils.graphML as gml
-import Modules.architectures as archit
+import Modules.architectures_sigmoid as archit
 import Modules.model as model
 import Modules.train as train
 
@@ -89,7 +89,7 @@ all_author_names = ['abbott', 'stevenson', 'alcott', 'alger', 'allen', 'austen',
                     'garland', 'hawthorne', 'james', 'melville', 'page', 'thoreau', 'twain', 'doyle', 'irving', 'poe',
                     'jewett', 'wharton']
 
-BASE_FILE_NAME = 'GNN_Polynomial_gender_weight_decay_'
+BASE_FILE_NAME = 'GNN_one_vs_one_bronte_dickens'
 
 thisFilename = 'authorEdgeNets'  # This is the general name of all related files
 
@@ -379,7 +379,7 @@ if path.exists(BASE_FILE_NAME) and os.stat(BASE_FILE_NAME).st_size > 0:
         training_results = json.load(f)
 
 #   Load the data, which will give a specific split
-data = Utils.dataTools.AutorshipGender(ratioTrain, ratioValid, dataPath)
+data = Utils.dataTools.AuthorshipOneVsOne('bronte', 'dickens', ratioTrain, ratioValid, dataPath)
 
 # %%##################################################################
 
@@ -407,7 +407,7 @@ for combination in combinations:
         # if split is not 0:
         #     data.get_split(authorName, ratioTrain, ratioValid)
 
-        data.get_split(ratioTrain, ratioValid)
+        data.get_split('bronte', 'dickens', ratioTrain, ratioValid)
 
         # Now, we are in position to know the number of nodes (for now; this might
         # change later on when the graph is created and the options on whether to

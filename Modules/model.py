@@ -340,7 +340,7 @@ class Model:
                 #   same value, but detaches it from the gradient, so that no
                 #   gradient operation is taken into account here.
                 #   (Alternatively, we could use a with torch.no_grad():)
-                accTrain = data.evaluate(yHatTrain.data, yTrain)
+                accTrain = data.get_results(yHatTrain.data, yTrain)
 
                 # Logging values
                 if doLogging:
@@ -391,7 +391,7 @@ class Model:
                                                    yValid.type(torch.int64))
 
                         # Compute accuracy:
-                        accValid = data.evaluate(yHatValid, yValid)
+                        accValid = data.get_results(yHatValid, yValid)
 
                         # Logging values
                         if doLogging:
@@ -556,7 +556,7 @@ class Model:
             # yHatTest is of shape
             #   testSize x numberOfClasses
             # We compute the accuracy
-            accBest = data.evaluate(yHatTest, yTest)
+            accBest = data.get_results(yHatTest, yTest)
 
         if self.trainingOptions['doPrint']:
             print("Evaluation (Best): %6.2f%%" % (accBest * 100.))
@@ -573,7 +573,7 @@ class Model:
             # yHatTest is of shape
             #   testSize x numberOfClasses
             # We compute the accuracy
-            accLast = data.evaluate(yHatTest, yTest)
+            accLast = data.get_results(yHatTest, yTest)
 
         if self.trainingOptions['doPrint']:
             print("Evaluation (Last): %6.2f%%" % (accLast * 100.))

@@ -167,7 +167,7 @@ class SelectionGNN(nn.Module):
             # N[-1]*F[-1])
             fc.append(nn.Linear(dimInputMLP, dimLayersMLP[0], bias=self.bias))
 
-            # fc.append(torch.nn.Sigmoid())
+            fc.append(torch.nn.Sigmoid())
 
             # The last linear layer cannot be followed by nonlinearity, because
             # usually, this nonlinearity depends on the loss function (for
@@ -953,7 +953,7 @@ class EdgeVariantSelectionGNN(nn.Module):
             # N[-1]*F[-1])
             fc.append(nn.Linear(dimInputMLP, dimLayersMLP[0], bias=self.bias))
 
-            # fc.append(torch.nn.Sigmoid())
+            fc.append(torch.nn.Sigmoid())
 
             # The last linear layer cannot be followed by nonlinearity, because
             # usually, this nonlinearity depends on the loss function (for

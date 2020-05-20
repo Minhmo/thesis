@@ -1171,7 +1171,7 @@ class MaxPoolLocal(nn.Module):
                                                     self.maxNeighborhoodSize])
         gatherNeighbor = gatherNeighbor.repeat([batchSize, dimNodeSignals, 1, 1])
         # And finally we're in position of getting all the neighbors in line
-        xNeighbors = torch.gather(x, 2, gatherNeighbor)
+        xNeighbors = torch.gather(x, 2, gatherNeighbor.long())
         #   B x F x nOutput x maxNeighbor
         # Note that this gather function already reduces the dimension to
         # nOutputNodes.

@@ -89,6 +89,9 @@ def analyse_GNN_results_extra(train_result):
     stds = []
 
     for comb in train_result.keys():
+        if not train_result[comb]:
+            continue
+
         mean_acc = np.mean(train_result[comb]['acc'])
         mean_f1 = np.mean(train_result[comb]['f1'])
         mean_auc = np.mean(train_result[comb]['auc'])
@@ -118,7 +121,7 @@ def prepare_for_training(data, order):
     return data_ordered
 
 
-def fashion_scatter(x, colors):
+def fashion_scatter(x, colors, name=""):
     # choose a color palette with seaborn.
     num_classes = len(np.unique(colors))
     palette = np.array(sns.color_palette("hls", num_classes))
@@ -132,6 +135,7 @@ def fashion_scatter(x, colors):
     ax.axis('off')
     ax.axis('tight')
 
+    plt.title(name)
     # add the labels for each digit corresponding to the label
     txts = []
 
@@ -288,6 +292,88 @@ with open(FILE_NAME_GENDER, 'r') as f:
                       'best_comb': best_comb,
                       'std': std}
 
+    # %%##################################################################
+    # Analyse GAT and GCAT results on AA
+
+    all_author_names = ['abbott', 'stevenson', 'alcott', 'alger', 'allen', 'austen', 'bronte', 'cooper', 'dickens',
+                        'garland', 'hawthorne', 'james', 'melville', 'page', 'thoreau', 'twain', 'doyle', 'irving',
+                        'poe',
+                        'jewett', 'wharton']
+
+    FILE_NAME_GAT = 'results/AA_GAT/Autorship_attribution_GAT_results_'
+    FILE_NAME_GCAT = 'results/AA_GCAT/Autorship_attribution_GCAT_results_'
+
+    GAT_RES = {}
+    GCAT_RES = {}
+    EDGE_RES = {}
+
+    for author_name in all_author_names:
+        if not (path.exists("{0}{1}.txt".format(FILE_NAME_GAT, author_name)) and path.exists(
+                "{0}{1}.txt".format(FILE_NAME_GCAT, author_name))):
+            GAT_RES[author_name] = {'best_acc': None, "best_comb": None, "std": None}
+            GCAT_RES[author_name] = {'best_acc': None, "best_comb": None, "std": None}
+            EDGE_RES[author_name] = {'best_acc': None, "best_comb": None, "std": None}
+
+            continue
+
+        with open('{0}{1}.txt'.format(FILE_NAME_GAT, author_name), 'r') as f:
+            train_result = json.load(f)
+            GAT_RES[author_name] = train_result
+            best_acc, best_comb, std, best_f1, best_auc = analyse_GNN_results_extra(GAT_RES[author_name])
+            GAT_RES[author_name] = {'best_acc': best_acc, "best_comb": best_comb, "std": std}
+
+        with open('{0}{1}.txt'.format(FILE_NAME_GCAT, author_name), 'r') as f:
+            train_result = json.load(f)
+            GCAT_RES[author_name] = train_result
+            best_acc, best_comb, std, best_f1, best_auc = analyse_GNN_results_extra(GCAT_RES[author_name])
+            GCAT_RES[author_name] = {'best_acc': best_acc, "best_comb": best_comb, "std": std}
+
+    # %%##################################################################
+    # Analyse Edgenet results
+
+    all_author_names = ['abbott', 'stevenson', 'alcott', 'alger', 'allen', 'austen', 'bronte', 'cooper', 'dickens',
+                        'garland', 'hawthorne', 'james', 'melville', 'page', 'thoreau', 'twain', 'doyle', 'irving',
+                        'poe',
+                        'jewett', 'wharton']
+
+    FILE_NAME_EDGE_GCNN_BEST = 'results/edgenet_authorship_attribution/best_GCNN/Autorship_attribution_edgenet_results_'
+    FILE_NAME_EDGE_search = 'results/edgenet_authorship_attribution/edgnet_grid_search/Autorship_attribution_edgenet_search_results_'
+    EDGE_RES = {}
+    EDGE_GRID_RES = {}
+
+    for author_name in all_author_names:
+        if not path.exists("{0}{1}.txt".format(FILE_NAME_EDGE_GCNN_BEST, author_name)):
+            EDGE_RES[author_name] = {'best_acc': 0, "best_comb": 'None', "std": 0}
+
+            continue
+
+        with open('{0}{1}.txt'.format(FILE_NAME_EDGE_GCNN_BEST, author_name), 'r') as f:
+            train_result = json.load(f)
+            for key, v in train_result.items():
+                cur = train_result[key]
+                for k2, v2 in cur.items():
+                    res = []
+                    for v3 in v2:
+                        if v3 is not None:
+                            res.append(v3)
+                    # train_result[key][k2] = [0 if v is None else v for v in v2]
+                    train_result[key][k2] = res
+
+            EDGE_RES[author_name] = train_result
+            best_acc, best_comb, std, best_f1, best_auc = analyse_GNN_results_extra(EDGE_RES[author_name])
+            EDGE_RES[author_name] = {'best_acc': best_acc, "best_comb": best_comb, "std": std}
+
+    for author_name in all_author_names:
+        if not path.exists("{0}{1}.txt".format(FILE_NAME_EDGE_search, author_name)):
+            EDGE_GRID_RES[author_name] = {'best_acc': 0, "best_comb": 'None', "std": 0}
+
+            continue
+        with open('{0}{1}.txt'.format(FILE_NAME_EDGE_search, author_name), 'r') as f:
+            train_result = json.load(f)
+            EDGE_GRID_RES[author_name] = train_result
+            best_acc, best_comb, std, best_f1, best_auc = analyse_GNN_results_extra(EDGE_GRID_RES[author_name])
+            EDGE_GRID_RES[author_name] = {'best_acc': best_acc, "best_comb": best_comb, "std": std}
+
 # %%##################################################################
 # Anaylse results from using Phi matrix as a Shift operator
 
@@ -335,6 +421,7 @@ for author_name in all_author_names:
 
 phi_acc.close()
 phi_perc.close()
+
 # %%##################################################################
 # Compare GCNN results with FF results
 
@@ -389,30 +476,41 @@ for author_name in GCNN_results.keys():
 model_comparison_df = pd.DataFrame.from_dict(GCNN_results)
 model_comparison_df = model_comparison_df.T
 
-model_comparison_df['best_acc_ff'] = [v['best_acc'] for k, v in two_feedforward_results.items()]
+model_comparison_df['Feed forward'] = [v['best_acc'] for k, v in two_feedforward_results.items()]
 model_comparison_df['best_comb_ff'] = [v['best_comb'] for k, v in two_feedforward_results.items()]
 
 # add linear model results
-model_comparison_df['best_acc_svm'] = [v for k, v in svm_results.items()]
-model_comparison_df['best_acc_knn'] = [v for k, v in knn_results.items()]
+model_comparison_df['SVM'] = [v for k, v in svm_results.items()]
+model_comparison_df['KNN'] = [v for k, v in knn_results.items()]
 
-model_comparison_df['random_so'] = [v['best_acc'] for v in GCNN_random_so_results.values()]
+model_comparison_df['GCNN with random SO'] = [v['best_acc'] for v in GCNN_random_so_results.values()]
 
 # add 2 layer GCNN results
-model_comparison_df['best_acc_2layer'] = [v['best_acc'] for k, v in GCNN_2layer_results.items()]
+model_comparison_df['2l GCNN'] = [v['best_acc'] for k, v in GCNN_2layer_results.items()]
 model_comparison_df['best_combination_2layer'] = [v['best_comb'] for k, v in GCNN_2layer_results.items()]
 
 # add GCNN results using PHI as SO
-model_comparison_df['best_acc_phi'] = [v['best_acc'] for k, v in GCNN_PHI_results.items()]
-model_comparison_df['best_acc_perc_phi'] = [v['best_acc'] for k, v in GCNN_PHI_perc_results.items()]
+model_comparison_df['GCNN with extracted SO (Acc)'] = [v['best_acc'] for k, v in GCNN_PHI_results.items()]
+model_comparison_df['GCNN with extracted SO (Perc)'] = [v['best_acc'] for k, v in GCNN_PHI_perc_results.items()]
 
 model_comparison_df['non_zero_el_acc_phi'] = [v['no_of_words'] for k, v in GCNN_PHI_results.items()]
 model_comparison_df['non_zero_el_perc_phi'] = [v['no_of_words'] for k, v in GCNN_PHI_perc_results.items()]
 
+model_comparison_df['GAT'] = [v['best_acc'] for k, v in GAT_RES.items()]
+model_comparison_df['GCAT'] = [v['best_acc'] for k, v in GCAT_RES.items()]
+model_comparison_df['EdgeNets (best GCNN)'] = [v['best_acc'] for k, v in EDGE_RES.items()]
+model_comparison_df['EdgeNets (HP search)'] = [v['best_acc'] for k, v in EDGE_GRID_RES.items()]
+model_comparison_df['Edge_search_best_comb'] = [v['best_comb'] for k, v in EDGE_GRID_RES.items()]
+model_comparison_df['Edge_best_gcnn_std'] = [v['std'] for k, v in EDGE_RES.items()]
+
 model_comparison_df = model_comparison_df[
-    ['best_acc', 'random_so', 'best_acc_phi', 'best_acc_perc_phi', 'non_zero_el_acc_phi', 'non_zero_el_perc_phi',
-     'best_acc_2layer',
-     'best_acc_ff', 'best_acc_svm', 'best_acc_knn',
+    ['best_acc', 'GAT', 'GCAT', 'EdgeNets (HP search)', 'Edge_search_best_comb', 'EdgeNets (best GCNN)',
+     'Edge_best_gcnn_std', 'GCNN with random SO', 'GCNN with extracted SO (Acc)',
+     'GCNN with extracted SO (Perc)',
+     'non_zero_el_acc_phi',
+     'non_zero_el_perc_phi',
+     '2l GCNN',
+     'Feed forward', 'SVM', 'KNN',
      'best_comb',
      'best_combination_2layer', 'best_comb_ff', 'std']]
 
@@ -454,10 +552,10 @@ pca_df['pca4'] = pca_result[:, 3]
 print('Variance explained per principal component: {}'.format(pca.explained_variance_ratio_))
 
 top_two_comp = pca_df[['pca1', 'pca2']]
-fashion_scatter(top_two_comp.values, y)
+fashion_scatter(top_two_comp.values, y, "PCA")
 
 fashion_tsne = TSNE(random_state=RS, perplexity=20).fit_transform(X)
-fashion_scatter(fashion_tsne, y)
+fashion_scatter(fashion_tsne, y, "TSNE")
 plt.show()
 plt.title("Raw signal")
 
@@ -884,10 +982,14 @@ with open('GNN_Polynomial_phi_non_zero_results_poe.txt', 'r') as f:
 # Gender classification result exploration
 
 GENDER_EDGE = 'results/gender/EdgeVariGNN_Gender_results_20200316165853.txt'
-GENDER_GCNN_2L = 'results/gender/2_layer_GNN_Polynomial_gender_results_20200316125137.txt'
-GENDER_GCNN = 'results/gender/GNN_Polynomial_gender_results_20200312161323.txt'
+GENDER_GCNN_2L = 'results/gender/2_layer_GCNN_gender_results_20200316125137.txt'
+GENDER_GCNN = 'results/gender/GCNN_gender_results_20200312161323.txt'
 GENDER_LINEAR_KNN = 'results/gender/knn_results_gender.txt'
 GENDER_LINEAR_SVM = 'results/gender/svm_results_gender.txt'
+GENDER_MEN_SO = 'results/gender/GCNN_gender_male_SO_20200410105100.txt'
+GENDER_EDGE_GCNN = 'results/gender/Edge_GCNN_gender_20200409191412.txt'
+GENDER_PHI_PERC = 'results/gender/GCNN_gender_phi_perc_results_20200409184507'
+
 df_gender_comparison = pd.DataFrame(index=['best_acc', 'best_comb', 'std', 'best_f1', 'best_auc'])
 
 with open(GENDER_EDGE, 'r') as f:
@@ -920,5 +1022,267 @@ with open(GENDER_LINEAR_SVM, 'r') as f:
     result = {'best_acc': result['abbott'], 'best_comb': '', 'std': '', 'best_f1': '', 'best_auc': ''}
     df_gender_comparison['GENDER_LINEAR_SVM'] = list(result.values())
 
+with open(GENDER_MEN_SO, 'r') as f:
+    train_result = json.load(f)
+    best_acc, best_comb, std, best_f1, best_auc = analyse_GNN_results_extra(train_result)
+    result = {'best_acc': best_acc, 'best_comb': best_comb, 'std': std, 'best_f1': best_f1, 'best_auc': best_auc}
+    df_gender_comparison['GENDER_MEN_SO'] = list(result.values())
+#
+with open(GENDER_EDGE_GCNN, 'r') as f:
+    train_result = json.load(f)
+    best_acc, best_comb, std, best_f1, best_auc = analyse_GNN_results_extra(train_result)
+    result = {'best_acc': best_acc, 'best_comb': best_comb, 'std': std, 'best_f1': best_f1, 'best_auc': best_auc}
+    df_gender_comparison['GENDER_EDGE_GCNN'] = list(result.values())
+#
+# with open(GENDER_PHI_PERC, 'r') as f:
+#     train_result = json.load(f)
+#     best_acc, best_comb, std, best_f1, best_auc = analyse_GNN_results_extra(train_result)
+#     result = {'best_acc': best_acc, 'best_comb': best_comb, 'std': std, 'best_f1': best_f1, 'best_auc': best_auc}
+#     df_gender_comparison['GENDER_PHI_PERC'] = list(result.values())
+
 # create a dataframe with info from GCNN and FF2
 # df_gender_comparison = df_gender_comparison.T
+
+
+# %%##################################################################
+# Extract SO for gender classification from Edgenets PHI matrix
+
+with open('EdgeVariGNN_gender_phi.txt', 'r') as f:
+    results = json.load(f)
+    phi = np.array(results['phi'])
+
+    function_words = np.array(data.functionWords)
+    function_words = function_words[results['nodes']]  # we get order from taining NN
+
+    important_pairs = [(function_words[x[0]] + " - " + function_words[x[1]]) for x in
+                       np.argwhere(np.abs(phi) > np.max(phi) - 0.05 * np.max(phi))]
+
+    indices_to_zero = [x for x in
+                       np.argwhere(np.abs(phi) < np.max(np.abs(phi)) - 0.3 * np.max(np.abs(phi)))]
+
+    for x, y in indices_to_zero:
+        phi[x, y] = 0
+
+    result = {'indices_to_zero': indices_to_zero, 'new_phi': phi}
+
+    with open('gender_phi_percentage.txt', 'w+') as outfile:
+        json.dump(phi.tolist(), outfile)
+
+with open('EdgeVariGNN_nationality_phi.txt', 'r') as f:
+    results = json.load(f)
+    phi = np.array(results['phi'])
+
+    function_words = np.array(data.functionWords)
+    function_words = function_words[results['nodes']]  # we get order from taining NN
+
+    important_pairs = [(function_words[x[0]] + " - " + function_words[x[1]]) for x in
+                       np.argwhere(np.abs(phi) > np.max(phi) - 0.05 * np.max(phi))]
+
+    indices_to_zero = [x for x in
+                       np.argwhere(np.abs(phi) < np.max(np.abs(phi)) - 0.3 * np.max(np.abs(phi)))]
+
+    for x, y in indices_to_zero:
+        phi[x, y] = 0
+
+    result = {'indices_to_zero': indices_to_zero, 'new_phi': phi}
+
+    with open('nationality_phi_percentage.txt', 'w+') as outfile:
+        json.dump(phi.tolist(), outfile)
+
+# %%##################################################################
+# Extract graphs for Elvin
+
+plt.style.use('fivethirtyeight')
+model_comparison_df['Error'] = 1 - model_comparison_df['best_acc']
+model_comparison_df['Error_ed'] = 1 - model_comparison_df['Edge']
+
+best_10_acc = model_comparison_df.sort_values(by=['Error'], ascending=True).head(15)
+best_10_acc = best_10_acc.rename(columns={"best_acc": "Accuracy"})
+# best_10_acc["Error"] = 1 - best_10_acc['Accuracy']
+#
+
+# best_10_acc = best_10_acc.drop(['austen', 'poe', 'bronte'], axis=0)
+best_10_acc = best_10_acc.drop(['austen', 'poe'], axis=0)
+best_10_acc = best_10_acc.round(2)
+
+final_df = pd.DataFrame(columns=['Name', 'Error', 'Sigma', 'Type'])
+
+for index, row in best_10_acc.iterrows():
+    cur_df = pd.DataFrame([[index, 1 - row['Accuracy'], row['std'], 'FIR']],
+                          columns=['Name', 'Error', 'Sigma', 'Type'])
+    final_df = final_df.append(cur_df)
+    # print(row['c1'], row['c2'])
+
+for index, row in best_10_acc.iterrows():
+    cur_df = pd.DataFrame([[index, 1 - row['Edge'], row['Edge_std'], 'EdgeNet']],
+                          columns=['Name', 'Error', 'Sigma', 'Type'])
+    final_df = final_df.append(cur_df)
+    # print(row['c1'], row['c2'])
+
+best_10_acc.index = best_10_acc.index.str.capitalize()
+
+# ax = sns.barplot(x='Name', y="Error", hue="Type", data=final_df, xerr=final_df['Sigma'])
+#
+# plt.show()
+
+
+import matplotlib
+import matplotlib.pyplot as plt
+import numpy as np
+
+labels = best_10_acc.index.to_list()
+fir_means = list(map(lambda x: round(x * 100, 2), best_10_acc['Error'].to_list()))
+fir_std = list(map(lambda x: round(x * 100, 2), best_10_acc['std'].to_list()))
+edge_means = list(map(lambda x: round(x * 100, 2), best_10_acc['Error_ed'].to_list()))
+edge_std = list(map(lambda x: round(x * 100, 2), best_10_acc['Edge_std'].to_list()))
+
+# edge_means = best_10_acc['Error_ed'].to_list()
+
+x = np.arange(len(labels))  # the label locations
+width = 0.35  # the width of the bars
+
+fig, ax = plt.subplots()
+rects1 = ax.bar(x - width / 2, fir_means, width, label='GCNN', yerr=fir_std)
+rects2 = ax.bar(x + width / 2, edge_means, width, label='EdgeNet', yerr=edge_std)
+
+# Add some text for labels, title and custom x-axis tick labels, etc.
+ax.set_ylabel('Classification error')
+# ax.set_title('Error by author and network type')
+ax.set_xticks(x)
+ax.set_xticklabels(labels)
+ax.legend()
+
+
+def autolabel(rects, offset=0.0):
+    """Attach a text label above each bar in *rects*, displaying its height."""
+    for rect in rects:
+        height = rect.get_height()
+        ax.annotate('{}'.format(height),
+                    xy=(rect.get_x() + rect.get_width() / 2, height + offset),
+                    xytext=(0, 3),  # 3 points vertical offset
+                    textcoords="offset points",
+                    ha='center', va='bottom')
+
+
+# autolabel(rects1)
+# autolabel(rects2, offset=0.02)
+
+fig.tight_layout()
+# fig.savefig('plots/error_by_author_and_network.fig')
+plt.show()
+
+best_10_acc = best_10_acc.drop(['GAT', 'GCAT', 'random_so', 'best_acc_phi', 'best_acc_perc_phi',
+                                'non_zero_el_acc_phi',
+                                'non_zero_el_perc_phi',
+                                'best_acc_2layer',
+                                'best_acc_ff', 'best_acc_svm', 'best_acc_knn',
+                                'best_combination_2layer', 'best_comb_ff', 'std'], axis=1)
+
+# %%##################################################################
+# Export one vs all results table for summary
+
+model_comparison_df['GCNN'] = model_comparison_df['best_acc'].to_list()
+
+df_one_vs_all_results = pd.DataFrame()
+
+df_one_vs_all_results = model_comparison_df[
+    ['GCNN', 'GAT', 'GCAT', 'EdgeNets (HP search)', 'EdgeNets (best GCNN)',
+     '2l GCNN',
+     'Feed forward', 'SVM', 'KNN']]
+
+# df_one_vs_all_results = model_comparison_df[
+#     ['GCNN', 'GAT', 'GCAT', 'EdgeNets (HP search)', 'EdgeNets (best GCNN)',
+#      'GCNN with extracted SO (Acc)',
+#      'GCNN with extracted SO (Perc)',
+#      '2l GCNN',
+#      'Feed forward', 'SVM', 'KNN']]
+
+
+# %%##################################################################
+# Compare one-vs-one, one-vs-one-fingerprint and one-vs-all-fingerprint
+one_vs_one_base = 'results/one_vs_one/{}'
+one_vs_all_base = 'results/one_vs_all/{}'
+
+files = {
+    "1v1 GCNN": one_vs_one_base.format('One_vs_one_results_GCNN.json'),
+    "1v1 SVM": one_vs_one_base.format('One_vs_one_results_SVC.json'),
+    "1v1 FP GCNN": one_vs_one_base.format('One_vs_one_fingerprint_results_GCNN.json'),
+    "1v1 FP SVC": one_vs_one_base.format('One_vs_one_fingerprint_results_SVC.json'),
+    "1vAll FP GCNN": one_vs_all_base.format('One_vs_one_fingerprint_results_GCNN.json'),
+    "1vAll FP SVC": one_vs_all_base.format('One_vs_one_fingerprint_results_SVC.json'),
+}
+
+
+def get_author_avg(data):
+    acc = np.average([item['acc'] for item in data])
+    f1 = np.average([item['f1'] for item in data])
+    auc = np.average([item['auc'] for item in data])
+    prec = np.average([item['prec'] for item in data])
+    std = np.std([item['acc'] for item in data])
+
+    return acc, f1, auc, prec, std
+
+
+results = {}
+
+for k, v in files.items():
+    with open(v, 'r') as outfile:
+        data = json.load(outfile)
+
+        results[k] = {}
+        for author in data.keys():
+            acc, f1, auc, prec, std = get_author_avg(data[author])
+            # results[k][author] = {acc, f1, auc, prec}
+            results[k][author] = acc
+
+results_feature_search = {}
+feature_search_file_path = "results/one_vs_one/One_vs_one_fingerprint_feature_search_results_GCNN.json"
+
+with open(feature_search_file_path, 'r') as outfile:
+    data = json.load(outfile)
+
+    for author in data.keys():
+        results_feature_search[author] = {}
+        results_feature_search[author]['10'] = {results['1v1 FP GCNN'][author]}
+
+        for feat_count in data[author].keys():
+            acc, f1, auc, prec, std = get_author_avg(data[author][feat_count])
+            time = -np.average([item['time'] for item in data[author][feat_count]])
+
+            results_feature_search[author][feat_count] = {acc, f1, auc, prec, std, time}
+            # results_feature_search[author][feat_count] = str(
+            #     (acc, -np.average([item['time'] for item in data[author][feat_count]])))
+
+
+# PLOT degree dist
+plt.style.use('fivethirtyeight')
+i = 0
+
+fig = plt.figure()
+ax = fig.add_subplot(111)
+
+for key in results_feature_search.keys():
+
+    ax.plot([k for (k, v) in results_feature_search[key].items()], [list(v)[0] for (k,
+                                                                                    v) in
+                                                                    results_feature_search[key].items()], label=key,
+            linewidth=2.0)
+
+    if i % 5 == 4 and i != 0 and i < 19:
+        plt.xlabel("feat count")
+        plt.ylabel("Acc")
+
+        plt.title("Accuracy v.s. feat count")
+        plt.legend()
+        # fig.savefig("degree_distribution_{0}.png".format((i + 1) / 5))
+        plt.show()
+
+    if i % 5 == 4 and i != 0 and i < 19:
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+    i += 1
+
+plt.xlabel("feat count")
+plt.ylabel("Acc")
+plt.title("Accuracy v.s. feat count")
+plt.legend()

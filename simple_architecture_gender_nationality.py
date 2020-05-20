@@ -89,7 +89,7 @@ all_author_names = ['abbott', 'stevenson', 'alcott', 'alger', 'allen', 'austen',
                     'garland', 'hawthorne', 'james', 'melville', 'page', 'thoreau', 'twain', 'doyle', 'irving', 'poe',
                     'jewett', 'wharton']
 
-BASE_FILE_NAME = 'GNN_Polynomial_nationality_results_'
+BASE_FILE_NAME = 'GNN_Polynomial_gender_nationality_GCNN_'
 
 thisFilename = 'authorEdgeNets'  # This is the general name of all related files
 
@@ -162,7 +162,7 @@ nFeatures = [1, 64]  # F: number of output features of the only layer
 nShifts = [4]  # K: number of shift tap
 
 # set training params
-nClasses = 1  # Either authorName or not
+nClasses = 4  # Either authorName or not
 ratioTrain = 0.6  # Ratio of training samples
 ratioValid = 0.2  # Ratio of validation samples (out of the total training
 # samples)
@@ -209,7 +209,7 @@ beta2 = 0.999  # ADAM option only
 
 # \\\ Loss function choice
 # lossFunction = nn.CrossEntropyLoss()  # This applies a softmax before feeding
-lossFunction = nn.BCELoss()  # This applies a softmax before feeding
+lossFunction = nn.CrossEntropyLoss()  # This applies a softmax before feeding
 # it into the NLL, so we don't have to apply the softmax ourselves.
 
 # \\\ Overall training options
@@ -363,8 +363,8 @@ trainingOptions['validationInterval'] = validationInterval
 #                    DATA SPLIT REALIZATION                         #
 #                                                                   #
 #####################################################################
-F = nFeatures
-K = nShifts
+F = [nFeatures]
+K = [nShifts]
 # F = [16, 32, 64]
 # K = [1, 2, 3, 4, 5, 6, 7, 8, 9, 1]
 
@@ -374,26 +374,38 @@ training_results = {}
 
 # Start generating a new data split for each of the number of data splits that
 # we previously specified
-if path.exists(BASE_FILE_NAME) and os.stat(BASE_FILE_NAME).st_size > 0:
-    with open(BASE_FILE_NAME, 'r') as f:
+file_name = "{0}.txt".format(BASE_FILE_NAME)
+if path.exists(file_name) and os.stat(file_name).st_size > 0:
+    with open(file_name, 'r') as f:
         training_results = json.load(f)
 
 #   Load the data, which will give a specific split
-data = Utils.dataTools.AutorshipNationality(ratioTrain, ratioValid, dataPath)
+data = Utils.dataTools.AutorshipGenderNationality(ratioTrain, ratioValid, dataPath)
 
 # %%##################################################################
 
 for combination in combinations:
     if str(combination) in list(training_results.keys()):
-        print("SKIPPING COMBINATION: %s" % str(combination))
-        continue
+        if len(list(filter(None, training_results[str(combination)]))) >= 10:
+            print("SKIPPING COMBINATION: %s" % str(combination))
+            continue
+
+        training_results[str(combination)]['acc'] = list(filter(None, training_results[str(combination)]['acc']))
+        training_results[str(combination)]['f1'] = list(filter(None, training_results[str(combination)]['f1']))
+        # training_results[str(combination)]['auc'] = list(filter(None, training_results[str(combination)]['auc']))
+
+        for idx, item in enumerate(training_results[str(combination)]['acc']):
+            accBest[hParamsPolynomial['name']][idx] = item
+            f1_best[hParamsPolynomial['name']][idx] = training_results[str(combination)]['f1'][idx]
+            # roc_best[hParamsPolynomial['name']][idx] = training_results[str(combination)]['auc'][idx]
+
+    else:
+        training_results[str(combination)] = {"acc": [], "f1": []}
 
     if doPrint:
         print("COMBINATION: %s" % str(combination))
 
-    training_results[str(combination)] = []
-
-    for split in range(nDataSplits):
+    for split in range(len(training_results[str(combination)]['acc']), nDataSplits):
 
         ###################################################################
         #                                                                   #
@@ -520,7 +532,7 @@ for combination in combinations:
 
             if thisTrainer == 'ADAM':
                 thisOptim = optim.Adam(thisArchit.parameters(),
-                                       lr=learningRate, betas=(beta1, beta2))
+                                       lr=learningRate, betas=(beta1, beta2), weight_decay=0.01)
             elif thisTrainer == 'SGD':
                 thisOptim = optim.SGD(thisArchit.parameters(), lr=learningRate)
             elif thisTrainer == 'RMSprop':
@@ -631,15 +643,15 @@ for combination in combinations:
                 # yHatTest is of shape
                 #   testSize x numberOfClasses
                 # We compute the accuracy
-                thisAccBest = data.evaluate(yHatTest, yTest)
+                thisAccBest = data.evaluate_ce(yHatTest, yTest).item()
 
                 # convert to binary for metrics
-                yHatTest = np.round(yHatTest)
-                yHatTest = yHatTest.squeeze(1)
+                yHatTest = torch.argmax(yHatTest, dim=1)
+                # yHatTest = yHatTest.squeeze(1)
 
                 f1_score_test = f1_score(yTest, yHatTest, average='macro')
-                fpr, tpr, _ = roc_curve(yTest, yHatTest)
-                roc_auc = auc(fpr, tpr)
+                # fpr, tpr, _ = roc_curve(yTest, yHatTest)
+                # roc_auc = auc(fpr, tpr)
 
             if doPrint:
                 print("%s: %4.2f%%, f1_score: %4.2f%%" % (key, thisAccBest * 100., f1_score_test), flush=True)
@@ -658,12 +670,11 @@ for combination in combinations:
                 if thisModel in key:
                     accBest[thisModel][split] = thisAccBest
                     f1_best[thisModel][split] = f1_score_test
-                    roc_best[thisModel][split] = roc_auc
+                    # roc_best[thisModel][split] = roc_auc
                 # This is so that we can later compute a total accuracy with
                 # the corresponding error.
 
-    training_results[str(combination)] = {"acc": list(accBest['PolynomiGNN']), "f1": list(f1_best['PolynomiGNN']),
-                                          "auc": list(roc_best['PolynomiGNN'])}
+        training_results[str(combination)] = {"acc": list(accBest['PolynomiGNN']), "f1": list(f1_best['PolynomiGNN'])}
 
-with open('{1}{0}.txt'.format(today, BASE_FILE_NAME), 'w+') as outfile:
-    json.dump(training_results, outfile)
+        with open('{0}.txt'.format(BASE_FILE_NAME), 'w+') as outfile:
+            json.dump(training_results, outfile)

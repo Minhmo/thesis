@@ -71,7 +71,7 @@ from sklearn.metrics import roc_curve, auc
 import Utils.graphTools as graphTools
 import Utils.dataTools
 import Utils.graphML as gml
-import Modules.architectures as archit
+import Modules.architectures_sigmoid as archit
 import Modules.model as model
 import Modules.train as train
 
@@ -89,7 +89,7 @@ all_author_names = ['abbott', 'stevenson', 'alcott', 'alger', 'allen', 'austen',
                     'garland', 'hawthorne', 'james', 'melville', 'page', 'thoreau', 'twain', 'doyle', 'irving', 'poe',
                     'jewett', 'wharton']
 
-BASE_FILE_NAME = 'GNN_Polynomial_gender_weight_decay_'
+BASE_FILE_NAME = 'Edge_GCNN_nationality_results_'
 
 thisFilename = 'authorEdgeNets'  # This is the general name of all related files
 
@@ -158,8 +158,8 @@ saveSeed(randomStates, saveDir)
 #
 # author_name_comb = dict(zip(all_author_names, tuples))
 
-nFeatures = [1, 64]  # F: number of output features of the only layer
-nShifts = [4]  # K: number of shift tap
+nFeatures = [1, 32, 64]  # F: number of output features of the only layer
+nShifts = [3, 3]  # K: number of shift tap
 
 # set training params
 nClasses = 1  # Either authorName or not
@@ -266,7 +266,7 @@ modelList = []
 
 if doPolynomialGNN:
     hParamsPolynomial = {'name': 'PolynomiGNN', 'F': nFeatures, 'K': nShifts, 'bias': True, 'sigma': nn.ReLU,
-                         'rho': gml.NoPool, 'alpha': [1], 'dimLayersMLP': [nClasses]}  # Hyperparameters (hParams)
+                         'rho': gml.NoPool, 'alpha': [1, 1], 'dimLayersMLP': [nClasses]}  # Hyperparameters (hParams)
 
     # \\\ Architecture parameters
     # affected by the summary
@@ -363,37 +363,49 @@ trainingOptions['validationInterval'] = validationInterval
 #                    DATA SPLIT REALIZATION                         #
 #                                                                   #
 #####################################################################
-F = [nFeatures]
-K = [nShifts]
+F = nFeatures
+K = nShifts
 # F = [16, 32, 64]
 # K = [1, 2, 3, 4, 5, 6, 7, 8, 9, 1]
 
-combinations = list(itertools.product(F, K))
+combinations = list(itertools.product([F], [K]))
 
 training_results = {}
 
 # Start generating a new data split for each of the number of data splits that
 # we previously specified
-if path.exists(BASE_FILE_NAME) and os.stat(BASE_FILE_NAME).st_size > 0:
-    with open(BASE_FILE_NAME, 'r') as f:
+file_name = "{0}.txt".format(BASE_FILE_NAME)
+if path.exists(file_name) and os.stat(file_name).st_size > 0:
+    with open(file_name, 'r') as f:
         training_results = json.load(f)
 
 #   Load the data, which will give a specific split
-data = Utils.dataTools.AutorshipGender(ratioTrain, ratioValid, dataPath)
+data = Utils.dataTools.AutorshipNationality(ratioTrain, ratioValid, dataPath)
 
 # %%##################################################################
 
 for combination in combinations:
     if str(combination) in list(training_results.keys()):
-        print("SKIPPING COMBINATION: %s" % str(combination))
-        continue
+        if len(list(filter(None, training_results[str(combination)]))) >= 10:
+            print("SKIPPING COMBINATION: %s" % str(combination))
+            continue
+
+        training_results[str(combination)]['acc'] = list(filter(None, training_results[str(combination)]['acc']))
+        training_results[str(combination)]['f1'] = list(filter(None, training_results[str(combination)]['f1']))
+        # training_results[str(combination)]['auc'] = list(filter(None, training_results[str(combination)]['auc']))
+
+        for idx, item in enumerate(training_results[str(combination)]['acc']):
+            accBest[hParamsPolynomial['name']][idx] = item
+            f1_best[hParamsPolynomial['name']][idx] = training_results[str(combination)]['f1'][idx]
+            # roc_best[hParamsPolynomial['name']][idx] = training_results[str(combination)]['auc'][idx]
+
+    else:
+        training_results[str(combination)] = {"acc": [], "f1": []}
 
     if doPrint:
         print("COMBINATION: %s" % str(combination))
 
-    training_results[str(combination)] = []
-
-    for split in range(nDataSplits):
+    for split in range(len(training_results[str(combination)]['acc']), nDataSplits):
 
         ###################################################################
         #                                                                   #
@@ -491,12 +503,12 @@ for combination in combinations:
             # Override parameters with grid parameters.
             hParamsPolynomial['F'] = nFeatures
             hParamsPolynomial['K'] = nShifts
-            hParamsPolynomial['N'] = [nNodes]
+            hParamsPolynomial['N'] = [nNodes, nNodes]
 
             if doPrint:
                 print('COMBINATION {0}, {1}'.format(str(hParamsPolynomial['F']), str(hParamsPolynomial['K'])))
 
-            thisArchit = archit.SelectionGNN(  # Graph filtering
+            thisArchit = archit.EdgeVariantSelectionGNN(  # Graph filtering
                 hParamsPolynomial['F'],
                 hParamsPolynomial['K'],
                 hParamsPolynomial['bias'],
@@ -520,7 +532,7 @@ for combination in combinations:
 
             if thisTrainer == 'ADAM':
                 thisOptim = optim.Adam(thisArchit.parameters(),
-                                       lr=learningRate, betas=(beta1, beta2), weight_decay=0.01)
+                                       lr=learningRate, betas=(beta1, beta2))
             elif thisTrainer == 'SGD':
                 thisOptim = optim.SGD(thisArchit.parameters(), lr=learningRate)
             elif thisTrainer == 'RMSprop':
@@ -662,8 +674,8 @@ for combination in combinations:
                 # This is so that we can later compute a total accuracy with
                 # the corresponding error.
 
-    training_results[str(combination)] = {"acc": list(accBest['PolynomiGNN']), "f1": list(f1_best['PolynomiGNN']),
-                                          "auc": list(roc_best['PolynomiGNN'])}
+        training_results[str(combination)] = {"acc": list(accBest['PolynomiGNN']), "f1": list(f1_best['PolynomiGNN']),
+                                              "auc": list(roc_best['PolynomiGNN'])}
 
-    with open('{1}{0}.txt'.format(today, BASE_FILE_NAME), 'w+') as outfile:
-        json.dump(training_results, outfile)
+        with open('{0}.txt'.format(BASE_FILE_NAME), 'w+') as outfile:
+            json.dump(training_results, outfile)

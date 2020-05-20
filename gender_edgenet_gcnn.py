@@ -89,7 +89,7 @@ all_author_names = ['abbott', 'stevenson', 'alcott', 'alger', 'allen', 'austen',
                     'garland', 'hawthorne', 'james', 'melville', 'page', 'thoreau', 'twain', 'doyle', 'irving', 'poe',
                     'jewett', 'wharton']
 
-BASE_FILE_NAME = 'GNN_Polynomial_gender_weight_decay_'
+BASE_FILE_NAME = 'GNN_Polynomial_gender_results_'
 
 thisFilename = 'authorEdgeNets'  # This is the general name of all related files
 
@@ -158,8 +158,8 @@ saveSeed(randomStates, saveDir)
 #
 # author_name_comb = dict(zip(all_author_names, tuples))
 
-nFeatures = [1, 64]  # F: number of output features of the only layer
-nShifts = [4]  # K: number of shift tap
+nFeatures = [1, 64, 64]  # F: number of output features of the only layer
+nShifts = [3, 3]  # K: number of shift tap
 
 # set training params
 nClasses = 1  # Either authorName or not
@@ -266,7 +266,7 @@ modelList = []
 
 if doPolynomialGNN:
     hParamsPolynomial = {'name': 'PolynomiGNN', 'F': nFeatures, 'K': nShifts, 'bias': True, 'sigma': nn.ReLU,
-                         'rho': gml.NoPool, 'alpha': [1], 'dimLayersMLP': [nClasses]}  # Hyperparameters (hParams)
+                         'rho': gml.NoPool, 'alpha': [1, 1], 'dimLayersMLP': [nClasses]}  # Hyperparameters (hParams)
 
     # \\\ Architecture parameters
     # affected by the summary
@@ -365,8 +365,6 @@ trainingOptions['validationInterval'] = validationInterval
 #####################################################################
 F = [nFeatures]
 K = [nShifts]
-# F = [16, 32, 64]
-# K = [1, 2, 3, 4, 5, 6, 7, 8, 9, 1]
 
 combinations = list(itertools.product(F, K))
 
@@ -491,12 +489,12 @@ for combination in combinations:
             # Override parameters with grid parameters.
             hParamsPolynomial['F'] = nFeatures
             hParamsPolynomial['K'] = nShifts
-            hParamsPolynomial['N'] = [nNodes]
+            hParamsPolynomial['N'] = [nNodes, nNodes]
 
             if doPrint:
                 print('COMBINATION {0}, {1}'.format(str(hParamsPolynomial['F']), str(hParamsPolynomial['K'])))
 
-            thisArchit = archit.SelectionGNN(  # Graph filtering
+            thisArchit = archit.EdgeVariantSelectionGNN(  # Graph filtering
                 hParamsPolynomial['F'],
                 hParamsPolynomial['K'],
                 hParamsPolynomial['bias'],
@@ -662,8 +660,8 @@ for combination in combinations:
                 # This is so that we can later compute a total accuracy with
                 # the corresponding error.
 
-    training_results[str(combination)] = {"acc": list(accBest['PolynomiGNN']), "f1": list(f1_best['PolynomiGNN']),
-                                          "auc": list(roc_best['PolynomiGNN'])}
+        training_results[str(combination)] = {"acc": list(accBest['PolynomiGNN']), "f1": list(f1_best['PolynomiGNN']),
+                                              "auc": list(roc_best['PolynomiGNN'])}
 
-    with open('{1}{0}.txt'.format(today, BASE_FILE_NAME), 'w+') as outfile:
-        json.dump(training_results, outfile)
+        with open('{1}{0}.txt'.format(today, BASE_FILE_NAME), 'w+') as outfile:
+            json.dump(training_results, outfile)

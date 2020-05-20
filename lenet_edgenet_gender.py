@@ -49,13 +49,11 @@
 # import matplotlib.pyplot as plt
 import datetime
 # \\\ Standard libraries:
-import itertools
 import json
 import os.path
 from os import path
 
 import numpy as np
-import pandas as pd
 import torch
 
 # from scipy.io import savemat
@@ -89,7 +87,7 @@ all_author_names = ['abbott', 'stevenson', 'alcott', 'alger', 'allen', 'austen',
                     'garland', 'hawthorne', 'james', 'melville', 'page', 'thoreau', 'twain', 'doyle', 'irving', 'poe',
                     'jewett', 'wharton']
 
-BASE_FILE_NAME = 'GNN_Polynomial_gender_weight_decay_'
+BASE_FILE_NAME = 'GNN_Polynomial_Lenet_gender_results_'
 
 thisFilename = 'authorEdgeNets'  # This is the general name of all related files
 
@@ -158,8 +156,9 @@ saveSeed(randomStates, saveDir)
 #
 # author_name_comb = dict(zip(all_author_names, tuples))
 
-nFeatures = [1, 64]  # F: number of output features of the only layer
-nShifts = [4]  # K: number of shift tap
+nFeatures = [1, 6, 16]  # F: number of output features of the only layer
+nShifts = [4, 4]  # K: number of shift tap
+pool_neighbourhood = [1, 1]
 
 # set training params
 nClasses = 1  # Either authorName or not
@@ -213,8 +212,8 @@ lossFunction = nn.BCELoss()  # This applies a softmax before feeding
 # it into the NLL, so we don't have to apply the softmax ourselves.
 
 # \\\ Overall training options
-nEpochs = 12  # Number of epochs
-batchSize = 32  # Batch size
+nEpochs = 40  # Number of epochs
+batchSize = 64  # Batch size
 doLearningRateDecay = False  # Learning rate decay
 learningRateDecayRate = 0.9  # Rate
 learningRateDecayPeriod = 1  # How many epochs after which update the lr
@@ -266,7 +265,8 @@ modelList = []
 
 if doPolynomialGNN:
     hParamsPolynomial = {'name': 'PolynomiGNN', 'F': nFeatures, 'K': nShifts, 'bias': True, 'sigma': nn.ReLU,
-                         'rho': gml.NoPool, 'alpha': [1], 'dimLayersMLP': [nClasses]}  # Hyperparameters (hParams)
+                         'rho': gml.MaxPoolLocal, 'alpha': pool_neighbourhood,
+                         'dimLayersMLP': [nClasses], 'order': 'Degree'}  # Hyperparameters (hParams)
 
     # \\\ Architecture parameters
     # affected by the summary
@@ -363,12 +363,13 @@ trainingOptions['validationInterval'] = validationInterval
 #                    DATA SPLIT REALIZATION                         #
 #                                                                   #
 #####################################################################
-F = [nFeatures]
-K = [nShifts]
+# F = [16]
+# K = [1]
 # F = [16, 32, 64]
 # K = [1, 2, 3, 4, 5, 6, 7, 8, 9, 1]
 
-combinations = list(itertools.product(F, K))
+# combinations = list(itertools.product(F, K))
+combinations = list((nFeatures, nShifts))
 
 training_results = {}
 
@@ -485,18 +486,21 @@ for combination in combinations:
             # order is an np.array with the ordering of the nodes with respect
             # to the original GSO (the original GSO is kept in G.S).
 
+            no_of_nodes = [20, 15]
+            # no_of_nodes = [round(nNodes / 3), round(nNodes / 9), round(nNodes / 9)]
+
             ################
             # ARCHITECTURE #
             ################
             # Override parameters with grid parameters.
             hParamsPolynomial['F'] = nFeatures
             hParamsPolynomial['K'] = nShifts
-            hParamsPolynomial['N'] = [nNodes]
+            hParamsPolynomial['N'] = no_of_nodes
 
             if doPrint:
                 print('COMBINATION {0}, {1}'.format(str(hParamsPolynomial['F']), str(hParamsPolynomial['K'])))
 
-            thisArchit = archit.SelectionGNN(  # Graph filtering
+            thisArchit = archit.EdgeVariantGNN(  # Graph filtering
                 hParamsPolynomial['F'],
                 hParamsPolynomial['K'],
                 hParamsPolynomial['bias'],
@@ -520,7 +524,7 @@ for combination in combinations:
 
             if thisTrainer == 'ADAM':
                 thisOptim = optim.Adam(thisArchit.parameters(),
-                                       lr=learningRate, betas=(beta1, beta2), weight_decay=0.01)
+                                       lr=learningRate, betas=(beta1, beta2))
             elif thisTrainer == 'SGD':
                 thisOptim = optim.SGD(thisArchit.parameters(), lr=learningRate)
             elif thisTrainer == 'RMSprop':
@@ -662,8 +666,8 @@ for combination in combinations:
                 # This is so that we can later compute a total accuracy with
                 # the corresponding error.
 
-    training_results[str(combination)] = {"acc": list(accBest['PolynomiGNN']), "f1": list(f1_best['PolynomiGNN']),
-                                          "auc": list(roc_best['PolynomiGNN'])}
+        training_results[str(combination)] = {"acc": list(accBest['PolynomiGNN']), "f1": list(f1_best['PolynomiGNN']),
+                                              "auc": list(roc_best['PolynomiGNN'])}
 
-    with open('{1}{0}.txt'.format(today, BASE_FILE_NAME), 'w+') as outfile:
-        json.dump(training_results, outfile)
+        with open('{1}{0}.txt'.format(today, BASE_FILE_NAME), 'w+') as outfile:
+            json.dump(training_results, outfile)

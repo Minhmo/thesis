@@ -8,7 +8,7 @@ from Modules import train, model
 from Utils import graphTools
 import numpy as np
 import Utils.graphML as gml
-import Modules.architectures as archit
+import Modules.architectures_sigmoid as archit
 
 torch.set_default_dtype(torch.float64)
 
@@ -83,7 +83,7 @@ if doLearningRateDecay:
 trainingOptions['validationInterval'] = validationInterval
 
 
-def train_net(data, h_parameters):
+def train_net(data, h_parameters, phi=None):
     # Now, we are in position to know the number of nodes (for now; this might
     # change later on when the graph is created and the options on whether to
     # make it connected, etc., come into effect)
@@ -107,16 +107,19 @@ def train_net(data, h_parameters):
 
     # And re-update the number of nodes for changes in the graph (due to
     # enforced connectedness, for instance)
-    nNodes = G.N
-    nodesToKeep = np.array(nodesToKeep)
-    # And re-update the data (keep only the nodes that are kept after isolated
-    # nodes or nodes to make the graph connected have been removed)
-    data.samples['train']['signals'] = \
-        data.samples['train']['signals'][:, nodesToKeep]
-    data.samples['valid']['signals'] = \
-        data.samples['valid']['signals'][:, nodesToKeep]
-    data.samples['test']['signals'] = \
-        data.samples['test']['signals'][:, nodesToKeep]
+    if phi is None:
+        nNodes = G.N
+        nodesToKeep = np.array(nodesToKeep)
+        # And re-update the data (keep only the nodes that are kept after isolated
+        # nodes or nodes to make the graph connected have been removed)
+        data.samples['train']['signals'] = \
+            data.samples['train']['signals'][:, nodesToKeep]
+        data.samples['valid']['signals'] = \
+            data.samples['valid']['signals'][:, nodesToKeep]
+        data.samples['test']['signals'] = \
+            data.samples['test']['signals'][:, nodesToKeep]
+    else:
+        nNodes = phi.shape[0]
 
     # Once data is completely formatted and in appropriate fashion, change its
     # type to torch and move it to the appropriate device
@@ -156,10 +159,23 @@ def train_net(data, h_parameters):
     thisBeta1 = beta1
     thisBeta2 = beta2
 
-    # \\\ Ordering
-    S, order = graphTools.permIdentity(G.S / np.max(np.diag(G.E)))
-    # order is an np.array with the ordering of the nodes with respect
-    # to the original GSO (the original GSO is kept in G.S).
+    if phi is None:
+        # \\\ Ordering
+        S, order = graphTools.permIdentity(G.S / np.max(np.diag(G.E)))
+        # order is an np.array with the ordering of the nodes with respect
+        # to the original GSO (the original GSO is kept in G.S).
+    else:
+        # compute the Eigenvalues of matrix
+        e, V = np.linalg.eig(phi)
+        # \\\ Ordering
+        highest_eig_val = np.max(np.diag(e)).real
+
+        if highest_eig_val == 0:
+            S, order = graphTools.permIdentity(phi)
+        else:
+            S, order = graphTools.permIdentity(phi / highest_eig_val)
+        # order is an np.array with the ordering of the nodes with respect
+        # to the original GSO (the original GSO is kept in G.S).
 
     ################
     # ARCHITECTURE #

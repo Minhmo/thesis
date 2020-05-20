@@ -64,14 +64,12 @@ torch.set_default_dtype(torch.float64)
 import torch.nn as nn
 import torch.optim as optim
 from ast import literal_eval as make_tuple
-from sklearn.metrics import f1_score
-from sklearn.metrics import roc_curve, auc
 
 # \\\ Own libraries:
 import Utils.graphTools as graphTools
 import Utils.dataTools
 import Utils.graphML as gml
-import Modules.architectures as archit
+import Modules.architectures_sigmoid as archit
 import Modules.model as model
 import Modules.train as train
 
@@ -89,7 +87,7 @@ all_author_names = ['abbott', 'stevenson', 'alcott', 'alger', 'allen', 'austen',
                     'garland', 'hawthorne', 'james', 'melville', 'page', 'thoreau', 'twain', 'doyle', 'irving', 'poe',
                     'jewett', 'wharton']
 
-BASE_FILE_NAME = 'GNN_Polynomial_gender_weight_decay_'
+BASE_FILE_NAME = 'GCNN_nationality_american_phi_perc_results_'
 
 thisFilename = 'authorEdgeNets'  # This is the general name of all related files
 
@@ -109,6 +107,9 @@ doFigs = True  # Plot some figures (this only works if doSaveVars is True)
 # \\\ Create .txt to store the values of the setting parameters for easier
 # reference when running multiple experiments
 today = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+
+file_name = BASE_FILE_NAME + ".txt"
+
 # Append date and time of the run to the directory, to avoid several runs of
 # overwritting each other.
 saveDir = saveDir + today
@@ -142,7 +143,6 @@ saveSeed(randomStates, saveDir)
 ########
 # DATA #
 ########
-
 # Possible authors: (just use the names in ' ')
 # jacob 'abbott', robert louis 'stevenson', louisa may 'alcott',
 # horatio 'alger', james 'allen', jane 'austen', emily 'bronte', james 'cooper',
@@ -152,13 +152,7 @@ saveSeed(randomStates, saveDir)
 # sarah orne 'jewett', edith 'wharton'
 
 
-# # load best performing hyperparameters
-# comparison_df = pd.read_json('model_comparison_df.json')
-# tuples = [make_tuple(x) for x in comparison_df['best_comb'].to_list()]
-#
-# author_name_comb = dict(zip(all_author_names, tuples))
-
-nFeatures = [1, 64]  # F: number of output features of the only layer
+nFeatures = [1, 32]  # F: number of output features of the only layer
 nShifts = [4]  # K: number of shift tap
 
 # set training params
@@ -187,15 +181,15 @@ forceConnected = True  # If True removes nodes (from lowest to highest degree)
 
 # \\\ Save values:
 writeVarValues(varsFile,
-               {
-                   'nClasses': nClasses,
-                   'ratioTrain': ratioTrain,
-                   'ratioValid': ratioValid,
-                   'nDataSplits': nDataSplits,
-                   'graphNormalizationType': graphNormalizationType,
-                   'keepIsolatedNodes': keepIsolatedNodes,
-                   'forceUndirected': forceUndirected,
-                   'forceConnected': forceConnected})
+               {'authorName': 'gender',
+                'nClasses': nClasses,
+                'ratioTrain': ratioTrain,
+                'ratioValid': ratioValid,
+                'nDataSplits': nDataSplits,
+                'graphNormalizationType': graphNormalizationType,
+                'keepIsolatedNodes': keepIsolatedNodes,
+                'forceUndirected': forceUndirected,
+                'forceConnected': forceConnected})
 
 ############
 # TRAINING #
@@ -327,13 +321,9 @@ if doLogging:
 # which split realization. Then, this will be converted to numpy to compute
 # mean and standard deviation (across the split dimension).
 accBest = {}  # Accuracy for the best model
-f1_best = {}  # Accuracy for the best model
-roc_best = {}  # Accuracy for the best model
 accLast = {}  # Accuracy for the last model
 for thisModel in modelList:  # Create an element for each split realization,
     accBest[thisModel] = [None] * nDataSplits
-    f1_best[thisModel] = [None] * nDataSplits
-    roc_best[thisModel] = [None] * nDataSplits
     accLast[thisModel] = [None] * nDataSplits
 
 ####################
@@ -374,79 +364,100 @@ training_results = {}
 
 # Start generating a new data split for each of the number of data splits that
 # we previously specified
-if path.exists(BASE_FILE_NAME) and os.stat(BASE_FILE_NAME).st_size > 0:
-    with open(BASE_FILE_NAME, 'r') as f:
+if path.exists(file_name) and os.stat(file_name).st_size > 0:
+    with open(file_name, 'r') as f:
         training_results = json.load(f)
 
 #   Load the data, which will give a specific split
-data = Utils.dataTools.AutorshipGender(ratioTrain, ratioValid, dataPath)
+data = Utils.dataTools.AutorshipNationality(ratioTrain, ratioValid, dataPath)
+
+# %%##################################################################
+#                                                                   #
+#                    LOAD PHI MATRICES                              #
+#                                                                   #
+#####################################################################
+
+with open('EdgeVariGNN_nationality_phi.txt', 'r') as f:
+    file = json.load(f)
+    phi = np.array(file['phi'])
+
+    indices_to_zero = [x for x in
+                       np.argwhere(np.abs(phi) < np.max(np.abs(phi)) - 0.3 * np.max(np.abs(phi)))]
+
+    for x, y in indices_to_zero:
+        phi[x, y] = 0
+
+    phi_matrix = np.copy(phi)
+    nodes_to_keep = np.array(file['nodes'])
+    function_words = np.array(data.functionWords)
+
+nonzero_el_count = np.count_nonzero(phi_matrix)
+
+if doPrint:
+    print("Loaded matrix PHI with shape: ({0}, {1}) and {2} non zero elements".format(phi_matrix.shape[0],
+                                                                                      phi_matrix.shape[1],
+                                                                                      nonzero_el_count))
+
+if nonzero_el_count < 1:
+    print("Number of non zero elements in Matrix PHI is too small: {0}".format(nonzero_el_count))
+    exit(-1)
 
 # %%##################################################################
 
 for combination in combinations:
+
     if str(combination) in list(training_results.keys()):
-        print("SKIPPING COMBINATION: %s" % str(combination))
-        continue
+        if len(list(filter(None, training_results[str(combination)]))) >= 10:
+            print("SKIPPING COMBINATION: %s" % str(combination))
+            continue
+
+        training_results[str(combination)]['acc'] = list(filter(None, training_results[str(combination)]['acc']))
+        training_results[str(combination)]['f1'] = list(filter(None, training_results[str(combination)]['f1']))
+        # training_results[str(combination)]['auc'] = list(filter(None, training_results[str(combination)]['auc']))
+
+        for idx, item in enumerate(training_results[str(combination)]['acc']):
+            accBest[hParamsPolynomial['name']][idx] = item
+            f1_best[hParamsPolynomial['name']][idx] = training_results[str(combination)]['f1'][idx]
+            # roc_best[hParamsPolynomial['name']][idx] = training_results[str(combination)]['auc'][idx]
+
+    else:
+        training_results[str(combination)] = {"acc": [], "f1": []}
 
     if doPrint:
         print("COMBINATION: %s" % str(combination))
 
-    training_results[str(combination)] = []
-
-    for split in range(nDataSplits):
+    for split in range(len(training_results[str(combination)]['acc']), nDataSplits):
+        data.get_split(ratioTrain, ratioValid)
 
         ###################################################################
         #                                                                   #
         #                    DATA HANDLING                                  #
         #                                                                   #
         #####################################################################
+
         ############
         # DATASETS #
         ############
 
-        # if split is not 0:
-        #     data.get_split(authorName, ratioTrain, ratioValid)
-
-        data.get_split(ratioTrain, ratioValid)
-
-        # Now, we are in position to know the number of nodes (for now; this might
-        # change later on when the graph is created and the options on whether to
-        # make it connected, etc., come into effect)
-        nNodes = data.selectedAuthor['all']['wordFreq'].shape[1]
-
-        #########
-        # GRAPH #
-        #########
-
-        # Create graph
-        nodesToKeep = []  # here we store the list of nodes kept after all
-        # modifications to the graph, so we can then update the data samples
-        # accordingly; since lists are passed as pointers (mutable objects)
-        # we can store the node list without necessary getting an output to the
-        # function
-        G = graphTools.Graph('fuseEdges', nNodes,
-                             data.selectedAuthor['train']['WAN'],
-                             'sum', graphNormalizationType, keepIsolatedNodes,
-                             forceUndirected, forceConnected, nodesToKeep)
-        G.computeGFT()  # Compute the GFT of the stored GSO
-
         # And re-update the number of nodes for changes in the graph (due to
         # enforced connectedness, for instance)
-        nNodes = G.N
-        nodesToKeep = np.array(nodesToKeep)
+        nNodes = phi_matrix.shape[0]
+
+        nodesToKeep = np.array(nodes_to_keep)
         # And re-update the data (keep only the nodes that are kept after isolated
         # nodes or nodes to make the graph connected have been removed)
         data.samples['train']['signals'] = \
-            data.samples['train']['signals'][:, nodesToKeep]
+            data.samples['train']['signals'][:, nodes_to_keep]
         data.samples['valid']['signals'] = \
-            data.samples['valid']['signals'][:, nodesToKeep]
+            data.samples['valid']['signals'][:, nodes_to_keep]
         data.samples['test']['signals'] = \
-            data.samples['test']['signals'][:, nodesToKeep]
+            data.samples['test']['signals'][:, nodes_to_keep]
 
         # Once data is completely formatted and in appropriate fashion, change its
         # type to torch and move it to the appropriate device
         data.astype(torch.float64)
         data.to(device)
+
         #####################################################################
         #                                                                   #
         #                    MODELS INITIALIZATION                          #
@@ -480,8 +491,15 @@ for combination in combinations:
             thisBeta1 = beta1
             thisBeta2 = beta2
 
+            # compute the Eigenvalues of matrix
+            e, V = np.linalg.eig(phi_matrix)
             # \\\ Ordering
-            S, order = graphTools.permIdentity(G.S / np.max(np.diag(G.E)))
+            highest_eig_val = np.max(np.diag(e)).real
+
+            if highest_eig_val == 0:
+                S, order = graphTools.permIdentity(phi_matrix)
+            else:
+                S, order = graphTools.permIdentity(phi_matrix / highest_eig_val)
             # order is an np.array with the ordering of the nodes with respect
             # to the original GSO (the original GSO is kept in G.S).
 
@@ -520,7 +538,7 @@ for combination in combinations:
 
             if thisTrainer == 'ADAM':
                 thisOptim = optim.Adam(thisArchit.parameters(),
-                                       lr=learningRate, betas=(beta1, beta2), weight_decay=0.01)
+                                       lr=learningRate, betas=(beta1, beta2))
             elif thisTrainer == 'SGD':
                 thisOptim = optim.SGD(thisArchit.parameters(), lr=learningRate)
             elif thisTrainer == 'RMSprop':
@@ -633,16 +651,8 @@ for combination in combinations:
                 # We compute the accuracy
                 thisAccBest = data.evaluate(yHatTest, yTest)
 
-                # convert to binary for metrics
-                yHatTest = np.round(yHatTest)
-                yHatTest = yHatTest.squeeze(1)
-
-                f1_score_test = f1_score(yTest, yHatTest, average='macro')
-                fpr, tpr, _ = roc_curve(yTest, yHatTest)
-                roc_auc = auc(fpr, tpr)
-
             if doPrint:
-                print("%s: %4.2f%%, f1_score: %4.2f%%" % (key, thisAccBest * 100., f1_score_test), flush=True)
+                print("%s: %4.2f%%" % (key, thisAccBest * 100.), flush=True)
 
             # Save value
             writeVarValues(varsFile,
@@ -657,13 +667,10 @@ for combination in combinations:
                 # that's the one to save.
                 if thisModel in key:
                     accBest[thisModel][split] = thisAccBest
-                    f1_best[thisModel][split] = f1_score_test
-                    roc_best[thisModel][split] = roc_auc
                 # This is so that we can later compute a total accuracy with
                 # the corresponding error.
 
-    training_results[str(combination)] = {"acc": list(accBest['PolynomiGNN']), "f1": list(f1_best['PolynomiGNN']),
-                                          "auc": list(roc_best['PolynomiGNN'])}
+        training_results[str(combination)] = list(accBest['PolynomiGNN'])
 
-    with open('{1}{0}.txt'.format(today, BASE_FILE_NAME), 'w+') as outfile:
-        json.dump(training_results, outfile)
+        with open(file_name, 'w+') as outfile:
+            json.dump(training_results, outfile)

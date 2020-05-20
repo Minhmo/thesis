@@ -89,7 +89,7 @@ all_author_names = ['abbott', 'stevenson', 'alcott', 'alger', 'allen', 'austen',
                     'garland', 'hawthorne', 'james', 'melville', 'page', 'thoreau', 'twain', 'doyle', 'irving', 'poe',
                     'jewett', 'wharton']
 
-BASE_FILE_NAME = 'GNN_Polynomial_gender_weight_decay_'
+BASE_FILE_NAME = 'gender_nationality_edgenet_results'
 
 thisFilename = 'authorEdgeNets'  # This is the general name of all related files
 
@@ -158,11 +158,11 @@ saveSeed(randomStates, saveDir)
 #
 # author_name_comb = dict(zip(all_author_names, tuples))
 
-nFeatures = [1, 64]  # F: number of output features of the only layer
-nShifts = [4]  # K: number of shift tap
+nFeatures = [1, 2]  # F: number of output features of the only layer
+nShifts = [2]  # K: number of shift tap
 
 # set training params
-nClasses = 1  # Either authorName or not
+nClasses = 4  # Either authorName or not
 ratioTrain = 0.6  # Ratio of training samples
 ratioValid = 0.2  # Ratio of validation samples (out of the total training
 # samples)
@@ -209,7 +209,7 @@ beta2 = 0.999  # ADAM option only
 
 # \\\ Loss function choice
 # lossFunction = nn.CrossEntropyLoss()  # This applies a softmax before feeding
-lossFunction = nn.BCELoss()  # This applies a softmax before feeding
+lossFunction = nn.CrossEntropyLoss()  # This applies a softmax before feeding
 # it into the NLL, so we don't have to apply the softmax ourselves.
 
 # \\\ Overall training options
@@ -365,8 +365,6 @@ trainingOptions['validationInterval'] = validationInterval
 #####################################################################
 F = [nFeatures]
 K = [nShifts]
-# F = [16, 32, 64]
-# K = [1, 2, 3, 4, 5, 6, 7, 8, 9, 1]
 
 combinations = list(itertools.product(F, K))
 
@@ -374,26 +372,38 @@ training_results = {}
 
 # Start generating a new data split for each of the number of data splits that
 # we previously specified
-if path.exists(BASE_FILE_NAME) and os.stat(BASE_FILE_NAME).st_size > 0:
-    with open(BASE_FILE_NAME, 'r') as f:
+file_name = "{0}.txt".format(BASE_FILE_NAME)
+if path.exists(file_name) and os.stat(file_name).st_size > 0:
+    with open(file_name, 'r') as f:
         training_results = json.load(f)
 
 #   Load the data, which will give a specific split
-data = Utils.dataTools.AutorshipGender(ratioTrain, ratioValid, dataPath)
+data = Utils.dataTools.AutorshipGenderNationality(ratioTrain, ratioValid, dataPath)
 
 # %%##################################################################
 
 for combination in combinations:
     if str(combination) in list(training_results.keys()):
-        print("SKIPPING COMBINATION: %s" % str(combination))
-        continue
+        if len(list(filter(None, training_results[str(combination)]))) >= 10:
+            print("SKIPPING COMBINATION: %s" % str(combination))
+            continue
+
+        training_results[str(combination)]['acc'] = list(filter(None, training_results[str(combination)]['acc']))
+        training_results[str(combination)]['f1'] = list(filter(None, training_results[str(combination)]['f1']))
+        # training_results[str(combination)]['auc'] = list(filter(None, training_results[str(combination)]['auc']))
+
+        for idx, item in enumerate(training_results[str(combination)]['acc']):
+            accBest[hParamsPolynomial['name']][idx] = item
+            f1_best[hParamsPolynomial['name']][idx] = training_results[str(combination)]['f1'][idx]
+            # roc_best[hParamsPolynomial['name']][idx] = training_results[str(combination)]['auc'][idx]
+
+    else:
+        training_results[str(combination)] = {"acc": [], "f1": []}
 
     if doPrint:
         print("COMBINATION: %s" % str(combination))
 
-    training_results[str(combination)] = []
-
-    for split in range(nDataSplits):
+    for split in range(len(training_results[str(combination)]['acc']), nDataSplits):
 
         ###################################################################
         #                                                                   #
@@ -496,7 +506,7 @@ for combination in combinations:
             if doPrint:
                 print('COMBINATION {0}, {1}'.format(str(hParamsPolynomial['F']), str(hParamsPolynomial['K'])))
 
-            thisArchit = archit.SelectionGNN(  # Graph filtering
+            thisArchit = archit.EdgeVariantGNN(  # Graph filtering
                 hParamsPolynomial['F'],
                 hParamsPolynomial['K'],
                 hParamsPolynomial['bias'],
@@ -620,50 +630,50 @@ for combination in combinations:
         if doPrint:
             print("Total testing accuracy (Best):", flush=True)
 
-        for key in modelsGNN.keys():
-            # Update order and adapt dimensions (this data has one input feature,
-            # so we need to add that dimension)
-            xTestOrdered = xTest[:, modelsGNN[key].order].unsqueeze(1)
+            for key in modelsGNN.keys():
+                # Update order and adapt dimensions (this data has one input feature,
+                # so we need to add that dimension)
+                xTestOrdered = xTest[:, modelsGNN[key].order].unsqueeze(1)
 
-            with torch.no_grad():
-                # Process the samples
-                yHatTest = modelsGNN[key].archit(xTestOrdered)
-                # yHatTest is of shape
-                #   testSize x numberOfClasses
-                # We compute the accuracy
-                thisAccBest = data.evaluate(yHatTest, yTest)
+                with torch.no_grad():
+                    # Process the samples
+                    yHatTest = modelsGNN[key].archit(xTestOrdered)
+                    # yHatTest is of shape
+                    #   testSize x numberOfClasses
+                    # We compute the accuracy
+                    thisAccBest = data.evaluate_ce(yHatTest, yTest).item()
 
-                # convert to binary for metrics
-                yHatTest = np.round(yHatTest)
-                yHatTest = yHatTest.squeeze(1)
+                    # convert to binary for metrics
+                    yHatTest = torch.argmax(yHatTest, dim=1)
+                    # yHatTest = yHatTest.squeeze(1)
 
-                f1_score_test = f1_score(yTest, yHatTest, average='macro')
-                fpr, tpr, _ = roc_curve(yTest, yHatTest)
-                roc_auc = auc(fpr, tpr)
+                    f1_score_test = f1_score(yTest, yHatTest, average='macro')
+                    # fpr, tpr, _ = roc_curve(yTest, yHatTest)
+                    # roc_auc = auc(fpr, tpr)
 
-            if doPrint:
-                print("%s: %4.2f%%, f1_score: %4.2f%%" % (key, thisAccBest * 100., f1_score_test), flush=True)
+                if doPrint:
+                    print("%s: %4.2f%%, f1_score: %4.2f%%" % (key, thisAccBest * 100., f1_score_test), flush=True)
 
-            # Save value
-            writeVarValues(varsFile,
-                           {'accBest%s' % key: thisAccBest})
+                # Save value
+                writeVarValues(varsFile,
+                               {'accBest%s' % key: thisAccBest})
 
-            # Now check which is the model being trained
-            for thisModel in modelList:
-                # If the name in the modelList is contained in the name with
-                # the key, then that's the model, and save it
-                # For example, if 'SelGNNDeg' is in thisModelList, then the
-                # correct key will read something like 'SelGNNDegG01' so
-                # that's the one to save.
-                if thisModel in key:
-                    accBest[thisModel][split] = thisAccBest
-                    f1_best[thisModel][split] = f1_score_test
-                    roc_best[thisModel][split] = roc_auc
-                # This is so that we can later compute a total accuracy with
-                # the corresponding error.
+                # Now check which is the model being trained
+                for thisModel in modelList:
+                    # If the name in the modelList is contained in the name with
+                    # the key, then that's the model, and save it
+                    # For example, if 'SelGNNDeg' is in thisModelList, then the
+                    # correct key will read something like 'SelGNNDegG01' so
+                    # that's the one to save.
+                    if thisModel in key:
+                        accBest[thisModel][split] = thisAccBest
+                        f1_best[thisModel][split] = f1_score_test
+                        # roc_best[thisModel][split] = roc_auc
+                    # This is so that we can later compute a total accuracy with
+                    # the corresponding error.
 
-    training_results[str(combination)] = {"acc": list(accBest['PolynomiGNN']), "f1": list(f1_best['PolynomiGNN']),
-                                          "auc": list(roc_best['PolynomiGNN'])}
+            training_results[str(combination)] = {"acc": list(accBest['PolynomiGNN']),
+                                                  "f1": list(f1_best['PolynomiGNN'])}
 
-    with open('{1}{0}.txt'.format(today, BASE_FILE_NAME), 'w+') as outfile:
-        json.dump(training_results, outfile)
+            with open('{0}.txt'.format(BASE_FILE_NAME), 'w+') as outfile:
+                json.dump(training_results, outfile)

@@ -240,9 +240,14 @@ def MultipleModels(modelsDict, data, nEpochs, batchSize,
                 # Obtain the output of the GNN
                 yHatTrain = modelsDict[key].archit(xTrainOrdered)
 
-                # Compute loss
-                lossValueTrain = modelsDict[key].loss(yHatTrain,
-                                                      yTrain.type(torch.double))
+                if modelsDict[key].loss.__str__() == 'CrossEntropyLoss()':
+                    # Compute loss
+                    lossValueTrain = modelsDict[key].loss(yHatTrain,
+                                                          yTrain.type(torch.int64))
+                else:
+                    # Compute loss
+                    lossValueTrain = modelsDict[key].loss(yHatTrain,
+                                                          yTrain.type(torch.double))
 
                 # Compute gradients
                 lossValueTrain.backward()
@@ -255,12 +260,16 @@ def MultipleModels(modelsDict, data, nEpochs, batchSize,
 
                 timeElapsed = abs(endTime - startTime).total_seconds()
 
-                # Compute the accuracy
-                #   Note: Using yHatTrain.data creates a new tensor with the
-                #   same value, but detaches it from the gradient, so that no
-                #   gradient operation is taken into account here.
-                #   (Alternatively, we could use a with torch.no_grad():)
-                accTrain = data.evaluate(yHatTrain.data, yTrain)
+                if modelsDict[key].loss.__str__() == 'CrossEntropyLoss()':
+                    # Compute the accuracy
+                    #   Note: Using yHatTrain.data creates a new tensor with the
+                    #   same value, but detaches it from the gradient, so that no
+                    #   gradient operation is taken into account here.
+                    #   (Alternatively, we could use a with torch.no_grad():)
+                    accTrain = data.evaluate_ce(yHatTrain.data, yTrain)
+
+                else:
+                    accTrain = data.evaluate(yHatTrain.data, yTrain)
 
                 # Logging values
                 if doLogging:
@@ -331,17 +340,25 @@ def MultipleModels(modelsDict, data, nEpochs, batchSize,
                         # Obtain the output of the GNN
                         yHatValid = modelsDict[key].archit(xValidOrdered)
 
-                        # Compute loss
-                        lossValueValid = modelsDict[key] \
-                            .loss(yHatValid, yValid.type(torch.double))
+                        if modelsDict[key].loss.__str__() == 'CrossEntropyLoss()':
+                            # Compute loss
+                            lossValueValid = modelsDict[key] \
+                                .loss(yHatValid, yValid.type(torch.int64))
+                        else:
+                            # Compute loss
+                            lossValueValid = modelsDict[key] \
+                                .loss(yHatValid, yValid.type(torch.double))
 
                         # Finish measuring time
                         endTime = datetime.datetime.now()
 
                         timeElapsed = abs(endTime - startTime).total_seconds()
 
-                        # Compute accuracy:
-                        accValid = data.evaluate(yHatValid, yValid)
+                        if modelsDict[key].loss.__str__() == 'CrossEntropyLoss()':
+                            accValid = data.evaluate_ce(yHatValid, yValid)
+                        else:
+                            # Compute accuracy:
+                            accValid = data.evaluate(yHatValid, yValid)
 
                         # Logging values
                         if doLogging:
