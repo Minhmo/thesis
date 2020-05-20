@@ -71,3 +71,5 @@ fabric.properties
 
 /experiments
 /authorData
+/plots
+/results
