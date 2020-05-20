@@ -73,3 +73,5 @@ fabric.properties
 /authorData
 /plots
 /results
+*.sbatch
+*.out
