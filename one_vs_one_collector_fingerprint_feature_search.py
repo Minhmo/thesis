@@ -56,18 +56,17 @@ def main():
         svc_results[name] = {}
 
         try:
-            feature_search = [30, 50, 70, 90]
+            percentages = [0.01, 0.02, 0.05, .1, .15, .20, .25, .30, 0.35, 0.4, 0.5]
+            # percentages = [0.05, .1, .15, .20, .25, .30]
 
-            for feture_count in feature_search:
-                logging.info('Starting training with feature count: {0}'.format(feture_count))
-                phi, indices = load_phi(name, no_of_features=feture_count)
+            for perc in percentages:
+                logging.info('Starting training with feature count: {0}'.format(perc))
 
+                svc_results[name][perc] = collect_svc(name, most_similar_name, perc)
+                logging.info('SVM results successfully collected: {0}'.format(svc_results[name][perc]))
 
-                svc_results[name][feture_count] = collect_svc(name, most_similar_name, indices)
-                logging.info('SVM results successfully collected: {0}'.format(svc_results[name][feture_count]))
-
-                GCNN_results[name][feture_count] = collect_gcnn(name, most_similar_name, phi, indices)
-                logging.info('GCNN results successfully collected: {0}'.format(GCNN_results[name][feture_count]))
+                GCNN_results[name][perc] = collect_gcnn(name, most_similar_name, perc)
+                logging.info('GCNN results successfully collected: {0}'.format(GCNN_results[name][perc]))
 
                 dump_results(GCNN_results, svc_results)
 
@@ -78,17 +77,22 @@ def main():
             raise e
 
 
-def collect_gcnn(name, most_similar_name, phi, ind):
+def collect_gcnn(name, most_similar_name, perc):
     gcnn_results = []
 
     data = dataTools.AuthorshipOneVsOne(name, most_similar_name, ratioTrain, ratioValid, dataPath)
     logging.info('Training GCNN on {0} v.s. {1}'.format(name, most_similar_name))
     h_params = ClusterUtils.load_best_hyperparams(name)
 
+    phi, indices = load_phi(name, data, percentage=perc)
+
+    if indices.shape[0] < 2:
+        return [{'acc': 0, 'f1': 0, 'auc': 0, 'prec': 0, 'time': 0}]
+
     for split_n in range(NO_OF_SPLITS):
         data.get_split(name, most_similar_name, ratioTrain, ratioValid)
 
-        data.reduce_dim(ind)
+        data.reduce_dim(indices)
 
         start = time.perf_counter()
 
@@ -105,11 +109,16 @@ def collect_gcnn(name, most_similar_name, phi, ind):
     return gcnn_results
 
 
-def collect_svc(name, most_similar_name, indices):
+def collect_svc(name, most_similar_name, perc):
     svc_results = []
 
     data = dataTools.AuthorshipOneVsOne(name, most_similar_name, ratioTrain, ratioValid, dataPath)
     logging.info('Training SVM on {0} v.s. {1}'.format(name, most_similar_name))
+
+    phi, indices = load_phi(name, data, percentage=perc)
+
+    if indices.shape[0] < 2:
+        return [{'acc': 0, 'f1': 0, 'auc': 0, 'prec': 0, 'time': 0}]
 
     for split_n in range(NO_OF_SPLITS):
         data.get_split(name, most_similar_name, ratioTrain, ratioValid)
@@ -198,38 +207,40 @@ def get_results(y_hat, y_val):
     return result
 
 
-def load_phi(name, phi_matrix_path='EdgeVariGNN_important_words_phi.txt', no_of_features=10):
+def load_phi(name, data, phi_matrix_path='EdgeVariGNN_important_words_phi.txt', percentage=0.01, eps=0.0001):
     with open(phi_matrix_path, 'r') as f:
         file = json.load(f)
 
         phi_whole = np.array(file[name]['phi'])
+        data.reduce_dim(file[name]['nodes'])
 
-        indices_to_keep = np.array([])
-        mult = 0.0
+        indices_to_zero = np.array([x for x in
+                                    np.argwhere(
+                                        np.abs(phi_whole) - np.max(np.abs(phi_whole)) + percentage * np.max(
+                                            np.abs(phi_whole)) < eps)])
 
-        while np.unique(indices_to_keep.flatten()).shape[0] <= no_of_features:
-            mult += 0.05
+        # indices_to_zero = np.array([x for x in
+        #                             np.argwhere(
+        #                                 np.logical_not(np.isclose(np.abs(phi_whole),
+        #                                                           np.max(np.abs(phi_whole)) - percentage * np.max(
+        #                                                               np.abs(phi_whole)))))])
 
-            indices_to_keep = np.array([x for x in
-                                        np.argwhere(
-                                            np.abs(phi_whole) >= np.max(np.abs(phi_whole)) - mult * np.max(
-                                                np.abs(phi_whole)))])
+        for x, y in indices_to_zero:
+            phi_whole[x, y] = 0
 
-        logging.info("PHI matrix for {1} loaded. Number of indices to keep: {0}".format(indices_to_keep.shape[0], name))
 
-        # ind = np.array(file[name]['indices'])
-        ind = indices_to_keep
-        ind = ind.flatten()
-        ind = np.unique(ind)
+        ind_X = []
 
-        phi = phi_whole[ind, :][:, ind]
+        for i in range(phi_whole.shape[0]):
+            if np.any(phi_whole[i, :]) or np.any(phi_whole[:, i]):
+                ind_X.append(i)
 
-        return phi, ind
-    #
-    #
-    # nonzero_el_count = np.count_nonzero(phi_matrix)
-    #
-    # nonzero_el_count = np.count_nonzero(phi_matrix)
+        phi = phi_whole[ind_X, :][:, ind_X]
+
+        logging.info(
+            "PHI matrix for {1} loaded. Number of dimensions: {0}".format(len(ind_X), name))
+
+        return phi, np.array(ind_X)
 
 
 if __name__ == '__main__':

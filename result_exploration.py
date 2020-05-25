@@ -1,6 +1,7 @@
 import json
 import os
 from os import path
+from pathlib import Path
 
 import matplotlib
 import torch
@@ -1236,23 +1237,24 @@ for k, v in files.items():
             results[k][author] = acc
 
 results_feature_search = {}
-feature_search_file_path = "results/one_vs_one/One_vs_one_fingerprint_feature_search_results_GCNN.json"
+feature_search_file_path = "results/one_vs_one/One_vs_one_fingerprint_feature_search_granularity_results_GCNN.json"
 
 with open(feature_search_file_path, 'r') as outfile:
     data = json.load(outfile)
 
     for author in data.keys():
         results_feature_search[author] = {}
-        results_feature_search[author]['10'] = {results['1v1 FP GCNN'][author]}
+        # results_feature_search[author]['10'] = {results['1v1 FP GCNN'][author]}
 
         for feat_count in data[author].keys():
             acc, f1, auc, prec, std = get_author_avg(data[author][feat_count])
             time = -np.average([item['time'] for item in data[author][feat_count]])
 
-            results_feature_search[author][feat_count] = {acc, f1, auc, prec, std, time}
+            results_feature_search[author][feat_count] = [acc, f1, auc, prec, std, time]
             # results_feature_search[author][feat_count] = str(
             #     (acc, -np.average([item['time'] for item in data[author][feat_count]])))
 
+Path("plots/one-vs-one/").mkdir(parents=True, exist_ok=True)
 
 # PLOT degree dist
 plt.style.use('fivethirtyeight')
@@ -1263,18 +1265,18 @@ ax = fig.add_subplot(111)
 
 for key in results_feature_search.keys():
 
-    ax.plot([k for (k, v) in results_feature_search[key].items()], [list(v)[0] for (k,
+    ax.plot([k for (k, v) in results_feature_search[key].items()], [v[0] for (k,
                                                                                     v) in
                                                                     results_feature_search[key].items()], label=key,
             linewidth=2.0)
 
     if i % 5 == 4 and i != 0 and i < 19:
-        plt.xlabel("feat count")
-        plt.ylabel("Acc")
+        plt.xlabel("No. of Features")
+        plt.ylabel("Accuracy")
 
         plt.title("Accuracy v.s. feat count")
         plt.legend()
-        # fig.savefig("degree_distribution_{0}.png".format((i + 1) / 5))
+        fig.savefig("plots/one-vs-one/one-vs-one_granularity_acc_vs_features_{0}.png".format((i + 1) / 5))
         plt.show()
 
     if i % 5 == 4 and i != 0 and i < 19:
@@ -1282,7 +1284,9 @@ for key in results_feature_search.keys():
         ax = fig.add_subplot(111)
     i += 1
 
-plt.xlabel("feat count")
-plt.ylabel("Acc")
+plt.xlabel("No. of Features")
+plt.ylabel("Accuracy")
 plt.title("Accuracy v.s. feat count")
 plt.legend()
+fig.savefig("plots/one-vs-one/one-vs-one_granularity_acc_vs_features_{0}.png".format((i + 1) / 5))
+plt.show()
