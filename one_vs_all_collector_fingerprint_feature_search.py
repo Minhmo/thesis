@@ -37,19 +37,24 @@ ONE_VS_ONE_RESULTS = "results/one_vs_all/One_vs_all_fingerprint_feature_search_r
 def main():
     Path("results/one_vs_all").mkdir(parents=True, exist_ok=True)
 
-    logging.info('Loading data for One-vs-All.')
+    logging.info('Loading data for One-vs-One.')
     data_general = dataTools.Authorship('poe', 1, 0, dataPath)
+
+    logging.info('Computing Dissimilarty matrix')
+    dis_m = signal_similarity.get_dissimilarity_matrix(data=data_general)
 
     logging.info('Starting training.')
 
-    GCNN_results = {}
-    svc_results = {}
+    GCNN_results, svc_results = load_prev_results()
 
     for idx, name in enumerate(all_author_names):
-        logging.info('Training GCNN and SVM on {0}'.format(name))
+        most_similar_name = get_most_similar_name(dis_m, idx)
+        logging.info('Training GCNN and SVM on {0} v.s. {1}'.format(name, most_similar_name))
 
-        GCNN_results[name] = {}
-        svc_results[name] = {}
+        if name not in svc_results.keys():
+            svc_results[name] = {}
+        if name not in GCNN_results.keys():
+            GCNN_results[name] = {}
 
         try:
             percentages = [0.01, 0.02, 0.05, .1, .15, .20, .25, .30, 0.35, 0.4, 0.5]
@@ -58,11 +63,17 @@ def main():
             for perc in percentages:
                 logging.info('Starting training with feature count: {0}'.format(perc))
 
-                svc_results[name][perc] = collect_svc(name, perc)
-                logging.info('SVM results successfully collected: {0}'.format(svc_results[name][perc]))
+                if str(perc) in svc_results[name].keys() and len(svc_results[name][str(perc)]) == 10:
+                    logging.info('Skipping SVC for {1} with perc: {0}'.format(perc, name))
+                else:
+                    svc_results[name][str(perc)] = collect_svc(name, most_similar_name, perc)
+                    logging.info('SVM results successfully collected: {0}'.format(svc_results[name][str(perc)]))
 
-                GCNN_results[name][perc] = collect_gcnn(name, perc)
-                logging.info('GCNN results successfully collected: {0}'.format(GCNN_results[name][perc]))
+                if str(perc) in GCNN_results[name].keys() and len(GCNN_results[name][str(perc)]) == 10:
+                    logging.info('Skipping GCNN for {1} with perc: {0}'.format(perc, name))
+                else:
+                    GCNN_results[name][str(perc)] = collect_gcnn(name, most_similar_name, perc)
+                    logging.info('GCNN results successfully collected: {0}'.format(GCNN_results[name][str(perc)]))
 
                 dump_results(GCNN_results, svc_results)
 
@@ -73,7 +84,24 @@ def main():
             raise e
 
 
-def collect_gcnn(name, perc):
+def load_prev_results(path=ONE_VS_ONE_RESULTS):
+    logging.info("Loading previous results")
+
+    gcnn_path = path.format("GCNN")
+
+    gcnn_res = {}
+    svc_res = {}
+
+    if Path(gcnn_path).exists():
+        with open(gcnn_path, 'r') as f:
+            gcnn_res = json.load(f)
+        with open(path.format("SVC"), 'r') as f:
+            svc_res = json.load(f)
+
+    return gcnn_res, svc_res
+
+
+def collect_gcnn(name, most_similar_name, perc):
     gcnn_results = []
 
     data = dataTools.Authorship(name, ratioTrain, ratioValid, dataPath)
@@ -105,7 +133,7 @@ def collect_gcnn(name, perc):
     return gcnn_results
 
 
-def collect_svc(name, perc):
+def collect_svc(name, most_similar_name, perc):
     svc_results = []
 
     data = dataTools.Authorship(name, ratioTrain, ratioValid, dataPath)
