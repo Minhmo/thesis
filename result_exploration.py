@@ -1254,39 +1254,112 @@ with open(feature_search_file_path, 'r') as outfile:
             # results_feature_search[author][feat_count] = str(
             #     (acc, -np.average([item['time'] for item in data[author][feat_count]])))
 
-Path("plots/one-vs-one/").mkdir(parents=True, exist_ok=True)
+# %%##################################################################
+# one-vs-one fingerpring search results
 
-# PLOT degree dist
-plt.style.use('fivethirtyeight')
-i = 0
+one_vs_one_base = 'results/one_vs_one/{}'
+results_feature_search = {}
+files = {
+    "1v1 FP GCNN": one_vs_one_base.format('One_vs_one_fingerprint_feature_search_results_GCNN.json'),
+    "1v1 FP SVC": one_vs_one_base.format('One_vs_one_fingerprint_feature_search_results_SVC.json')
+}
 
-fig = plt.figure()
-ax = fig.add_subplot(111)
+for k, v in files.items():
+    with open(v, 'r') as outfile:
+        data = json.load(outfile)
 
-for key in results_feature_search.keys():
+        results_feature_search[k] = []
 
-    ax.plot([k for (k, v) in results_feature_search[key].items()], [v[0] for (k,
-                                                                                    v) in
-                                                                    results_feature_search[key].items()], label=key,
-            linewidth=2.0)
+        for author in data.keys():
+            # results_feature_search[k][author] = []
+            # results_feature_search[k][author]['10'] = {results['1v1 FP GCNN'][author]}
 
-    if i % 5 == 4 and i != 0 and i < 19:
-        plt.xlabel("No. of Features")
-        plt.ylabel("Accuracy")
+            for feat_count in data[author].keys():
+                acc, f1, auc, prec, std = get_author_avg(data[author][feat_count])
+                time = -np.average([item['time'] for item in data[author][feat_count]])
 
-        plt.title("Accuracy v.s. feat count")
-        plt.legend()
-        fig.savefig("plots/one-vs-one/one-vs-one_granularity_acc_vs_features_{0}.png".format((i + 1) / 5))
-        plt.show()
+                results_feature_search[k].append({'acc': acc, "f1": f1, "auc": auc, "prec": prec, "std": std,
+                                                  "time": time,
+                                                  "perc": feat_count,
+                                                  "author": author})
 
-    if i % 5 == 4 and i != 0 and i < 19:
-        fig = plt.figure()
-        ax = fig.add_subplot(111)
-    i += 1
+# %%##################################################################
+# PLot box-plots for average drop for each percentage (for all authors) (GCNN)
 
-plt.xlabel("No. of Features")
-plt.ylabel("Accuracy")
-plt.title("Accuracy v.s. feat count")
-plt.legend()
-fig.savefig("plots/one-vs-one/one-vs-one_granularity_acc_vs_features_{0}.png".format((i + 1) / 5))
+df_1_v_1_fingerprint_search = pd.DataFrame(list(results_feature_search.values())[0])
+# df_1_v_1_fingerprint_search["best_acc"] = model_comparison_df["best_acc"].to_list()
+
+acc_drop = []
+
+for idx, acc in enumerate(df_1_v_1_fingerprint_search['acc'].to_list()):
+    best_acc = model_comparison_df["best_acc"][df_1_v_1_fingerprint_search['author'][idx]]
+    acc_drop.append(best_acc - acc)
+
+df_1_v_1_fingerprint_search['Accuracy drop'] = acc_drop
+df_1_v_1_fingerprint_search = df_1_v_1_fingerprint_search.rename(columns={"perc": "Percentage"})
+
+flatui = ["#9b59b6", "#3498db", "#95a5a6", "#e74c3c", "#34495e", "#2ecc71"]
+
+ax = sns.boxplot(x="Percentage", y="Accuracy drop", data=df_1_v_1_fingerprint_search, palette=sns.color_palette(flatui), linewidth=1.5)
+ax = sns.swarmplot(x="Percentage", y="Accuracy drop", data=df_1_v_1_fingerprint_search, palette=sns.color_palette(flatui), alpha=0.5)
+
 plt.show()
+
+# %%##################################################################
+# PLot box-plots for average drop for each percentage (for all authors) (SVM)
+
+df_1_v_1_fingerprint_search = pd.DataFrame(list(results_feature_search.values())[1])
+# df_1_v_1_fingerprint_search["best_acc"] = model_comparison_df["best_acc"].to_list()
+
+acc_drop = []
+
+for idx, acc in enumerate(df_1_v_1_fingerprint_search['acc'].to_list()):
+    best_acc = model_comparison_df["best_acc"][df_1_v_1_fingerprint_search['author'][idx]]
+    acc_drop.append(best_acc - acc)
+
+df_1_v_1_fingerprint_search['Accuracy drop'] = acc_drop
+df_1_v_1_fingerprint_search = df_1_v_1_fingerprint_search.rename(columns={"perc": "Percentage"})
+
+flatui = ["#9b59b6", "#3498db", "#95a5a6", "#e74c3c", "#34495e", "#2ecc71"]
+
+ax = sns.boxplot(x="Percentage", y="Accuracy drop", data=df_1_v_1_fingerprint_search, palette=sns.color_palette(flatui), linewidth=1.5)
+ax = sns.swarmplot(x="Percentage", y="Accuracy drop", data=df_1_v_1_fingerprint_search, palette=sns.color_palette(flatui), alpha=0.5)
+
+plt.show()
+
+# Path("plots/one-vs-one/").mkdir(parents=True, exist_ok=True)
+#
+# # PLOT degree dist
+# plt.style.use('fivethirtyeight')
+# i = 0
+#
+# fig = plt.figure()
+# ax = fig.add_subplot(111)
+#
+# for key in results_feature_search.keys():
+#
+#     ax.plot([k for (k, v) in results_feature_search[key].items()], [v[0] for (k,
+#                                                                                     v) in
+#                                                                     results_feature_search[key].items()], label=key,
+#             linewidth=2.0)
+#
+#     if i % 5 == 4 and i != 0 and i < 19:
+#         plt.xlabel("No. of Features")
+#         plt.ylabel("Accuracy")
+#
+#         plt.title("Accuracy v.s. feat count")
+#         plt.legend()
+#         fig.savefig("plots/one-vs-one/one-vs-one_granularity_acc_vs_features_{0}.png".format((i + 1) / 5))
+#         plt.show()
+#
+#     if i % 5 == 4 and i != 0 and i < 19:
+#         fig = plt.figure()
+#         ax = fig.add_subplot(111)
+#     i += 1
+#
+# plt.xlabel("No. of Features")
+# plt.ylabel("Accuracy")
+# plt.title("Accuracy v.s. feat count")
+# plt.legend()
+# fig.savefig("plots/one-vs-one/one-vs-one_granularity_acc_vs_features_{0}.png".format((i + 1) / 5))
+# plt.show()

@@ -625,8 +625,8 @@ for author_name in data.authorData.keys():
         phi = test[0, 0, 1, 0, :, :]
         phi = phi.detach().numpy()
 
-        new_phi = find_words(phi, np.max(accBest[thisModel]), 0.3)
-        phi = new_phi
+        # new_phi = find_words(phi, np.max(accBest[thisModel]), 0.3)
+        # phi = new_phi
 
         function_words = np.array(data.functionWords)
         function_words = function_words[nodesToKeep]  # we get order from taining NN
@@ -654,5 +654,5 @@ for k in training_results.keys():
     training_results[k]['nodes'] = [int(x) for x in training_results[k]['nodes']]
     training_results[k]['correlation_coef'] = float(training_results[k]['correlation_coef'][0, 1])
 
-with open('EdgeVariGNN_important_words_phi_accuracy3.txt', 'w+') as outfile:
+with open('phi_matrices.txt', 'w+') as outfile:
     json.dump(training_results, outfile)

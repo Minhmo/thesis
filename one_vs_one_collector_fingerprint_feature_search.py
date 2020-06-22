@@ -31,7 +31,7 @@ dataPath = os.path.join(dataDir, dataFilename)  # Data path
 
 NO_OF_SPLITS = 10
 ONE_VS_ALL_CRASH_FILE = "results/one_vs_one/One_vs_one_fingerprint_feature_search_crash_dump_{0}_{1}.json"
-ONE_VS_ONE_RESULTS = "results/one_vs_one/One_vs_one_fingerprint_feature_search_results_{0}.json"
+ONE_VS_ONE_RESULTS = "results/one_vs_one/One_vs_one_fingerprint_feature_search_results_newPhi_{0}.json"
 
 
 def main():
@@ -231,7 +231,7 @@ def get_results(y_hat, y_val):
     return result
 
 
-def load_phi(name, data, phi_matrix_path='EdgeVariGNN_important_words_phi.txt', percentage=0.01, eps=0.0001):
+def load_phi(name, data, phi_matrix_path='phi_matrices.txt', percentage=0.01, eps=0.0001):
     with open(phi_matrix_path, 'r') as f:
         file = json.load(f)
 
