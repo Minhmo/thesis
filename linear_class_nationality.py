@@ -75,13 +75,13 @@ def train_networks(data, name=""):
     knn_search_results = {}
     svc_search_results = {}
 
-    # train KNN
-    for k in K:
-        result = train_knn(k, data)
-        knn_search_results[k] = result
-
-    with open('knn_results_{}.txt'.format(name), 'w+') as outfile:
-        json.dump(knn_search_results, outfile)
+    # # train KNN
+    # for k in K:
+    #     result = train_knn(k, data)
+    #     knn_search_results[k] = result
+    #
+    # with open('knn_results_{}.txt'.format(name), 'w+') as outfile:
+    #     json.dump(knn_search_results, outfile)
 
     # train SVM
     svc_search_results = train_svm(data)
