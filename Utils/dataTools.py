@@ -2311,16 +2311,21 @@ class AutorshipNationality(_dataForClassification):
         xTest = np.concatenate((xAuthorTest, xRestTest), axis=0)
         labelsTest = np.concatenate((np.ones(nTestAuthor),
                                      np.zeros(nTestRest)), axis=0)
+
+        tr_perm = np.random.permutation(len(xTrain))
+        test_perm = np.random.permutation(len(xTest))
+        valid_perm = np.random.permutation(len(xValid))
+
         # And assign them to the required attribute samples
         self.samples = {'train': {}}
-        self.samples['train']['signals'] = xTrain
-        self.samples['train']['labels'] = labelsTrain
+        self.samples['train']['signals'] = xTrain[tr_perm]
+        self.samples['train']['labels'] = labelsTrain[tr_perm]
         self.samples['valid'] = {}
-        self.samples['valid']['signals'] = xValid
-        self.samples['valid']['labels'] = labelsValid
+        self.samples['valid']['signals'] = xValid[valid_perm]
+        self.samples['valid']['labels'] = labelsValid[valid_perm]
         self.samples['test'] = {}
-        self.samples['test']['signals'] = xTest
-        self.samples['test']['labels'] = labelsTest
+        self.samples['test']['signals'] = xTest[test_perm]
+        self.samples['test']['labels'] = labelsTest[test_perm]
         # Change data to specified type and device
         self.astype(self.dataType)
         self.to(self.device)

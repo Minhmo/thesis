@@ -59,6 +59,9 @@ import pandas as pd
 import torch
 
 # from scipy.io import savemat
+from sklearn import preprocessing
+from sklearn.metrics import f1_score, roc_curve, average_precision_score, auc
+from sklearn.svm import SVC
 
 torch.set_default_dtype(torch.float64)
 import torch.nn as nn
@@ -87,7 +90,7 @@ all_author_names = ['abbott', 'stevenson', 'alcott', 'alger', 'allen', 'austen',
                     'garland', 'hawthorne', 'james', 'melville', 'page', 'thoreau', 'twain', 'doyle', 'irving', 'poe',
                     'jewett', 'wharton']
 
-BASE_FILE_NAME = 'GCNN_nationality_phi_perc_results_'
+BASE_FILE_NAME = 'GCNN_nationality_phi_results'
 
 thisFilename = 'authorEdgeNets'  # This is the general name of all related files
 
@@ -109,6 +112,7 @@ doFigs = True  # Plot some figures (this only works if doSaveVars is True)
 today = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
 
 file_name = BASE_FILE_NAME + ".txt"
+svc_file_name = "SVC_nationality_phi_results.txt"
 
 # Append date and time of the run to the directory, to avoid several runs of
 # overwritting each other.
@@ -207,7 +211,7 @@ lossFunction = nn.BCELoss()  # This applies a softmax before feeding
 # it into the NLL, so we don't have to apply the softmax ourselves.
 
 # \\\ Overall training options
-nEpochs = 12  # Number of epochs
+nEpochs = 10  # Number of epochs
 batchSize = 32  # Batch size
 doLearningRateDecay = False  # Learning rate decay
 learningRateDecayRate = 0.9  # Rate
@@ -360,7 +364,8 @@ K = [nShifts]
 
 combinations = list(itertools.product(F, K))
 
-training_results = {}
+training_results = []
+svc_results = []
 
 # Start generating a new data split for each of the number of data splits that
 # we previously specified
@@ -371,63 +376,124 @@ if path.exists(file_name) and os.stat(file_name).st_size > 0:
 #   Load the data, which will give a specific split
 data = Utils.dataTools.AutorshipNationality(ratioTrain, ratioValid, dataPath)
 
+
 # %%##################################################################
 #                                                                   #
 #                    LOAD PHI MATRICES                              #
 #                                                                   #
 #####################################################################
 
-with open('EdgeVariGNN_nationality_phi.txt', 'r') as f:
-    file = json.load(f)
-    phi = np.array(file['phi'])
+def load_phi(data, phi_matrix_path='EdgeVariGNN_nationality_phi.txt', percentage=0.3, eps=0.0001):
+    with open(phi_matrix_path, 'r') as f:
+        file = json.load(f)
 
-    indices_to_zero = [x for x in
-                       np.argwhere(np.abs(phi) < np.max(np.abs(phi)) - 0.3 * np.max(np.abs(phi)))]
+        phi_whole = np.array(file['phi'])
+        data.reduce_dim(file['nodes'])
 
-    for x, y in indices_to_zero:
-        phi[x, y] = 0
+        indices_to_zero = np.array([x for x in
+                                    np.argwhere(
+                                        np.abs(phi_whole) - np.max(np.abs(phi_whole)) + percentage * np.max(
+                                            np.abs(phi_whole)) < eps)])
 
-    phi_matrix = np.copy(phi)
-    nodes_to_keep = np.array(file['nodes'])
-    function_words = np.array(data.functionWords)
+        # indices_to_zero = np.array([x for x in
+        #                             np.argwhere(
+        #                                 np.logical_not(np.isclose(np.abs(phi_whole),
+        #                                                           np.max(np.abs(phi_whole)) - percentage * np.max(
+        #                                                               np.abs(phi_whole)))))])
 
-nonzero_el_count = np.count_nonzero(phi_matrix)
+        for x, y in indices_to_zero:
+            phi_whole[x, y] = 0
 
-if doPrint:
-    print("Loaded matrix PHI with shape: ({0}, {1}) and {2} non zero elements".format(phi_matrix.shape[0],
-                                                                                      phi_matrix.shape[1],
-                                                                                      nonzero_el_count))
+        ind_X = []
 
-if nonzero_el_count < 1:
-    print("Number of non zero elements in Matrix PHI is too small: {0}".format(nonzero_el_count))
-    exit(-1)
+        for i in range(phi_whole.shape[0]):
+            if np.any(phi_whole[i, :]) or np.any(phi_whole[:, i]):
+                ind_X.append(i)
+
+        phi = phi_whole[ind_X, :][:, ind_X]
+
+        print(
+            "PHI matrix for loaded. Number of dimensions: {0}".format(len(ind_X)))
+
+        return phi, np.array(ind_X)
+
+
+def get_results(y_hat, y_val):
+    totalErrors = np.sum(np.abs(y_hat - y_val) > 1e-9)
+    accuracy = 1 - totalErrors.item() / len(y_val)
+
+    f1 = f1_score(y_val, y_hat)
+    fpr, tpr, _ = roc_curve(y_val, y_hat)
+    roc_auc = auc(fpr, tpr)
+    average_precision = average_precision_score(y_val, y_hat)
+
+    result = {'acc': accuracy, 'f1': f1, 'auc': roc_auc, 'prec': average_precision}
+
+    return result
+
+
+def evaluate_svc(arch, data):
+    X_valid, y_val = data.getSamples('valid')
+    X_valid = preprocessing.scale(X_valid)
+
+    y_hat = arch.predict(X_valid)
+
+    return get_results(y_hat, y_val.numpy())
+
+
+# with open('EdgeVariGNN_nationality_phi.txt', 'r') as f:
+#     file = json.load(f)
+#     phi = np.array(file['phi'])
+#
+#     indices_to_zero = [x for x in
+#                        np.argwhere(np.abs(phi) < np.max(np.abs(phi)) - 0.3 * np.max(np.abs(phi)))]
+#
+#     for x, y in indices_to_zero:
+#         phi[x, y] = 0
+#
+#     phi_matrix = np.copy(phi)
+#     nodes_to_keep = np.array(file['nodes'])
+#     function_words = np.array(data.functionWords)
+#
+# nonzero_el_count = np.count_nonzero(phi_matrix)
+#
+# if doPrint:
+#     print("Loaded matrix PHI with shape: ({0}, {1}) and {2} non zero elements".format(phi_matrix.shape[0],
+#                                                                                       phi_matrix.shape[1],
+#                                                                                       nonzero_el_count))
+#
+# if nonzero_el_count < 1:
+#     print("Number of non zero elements in Matrix PHI is too small: {0}".format(nonzero_el_count))
+#     exit(-1)
 
 # %%##################################################################
 
+phi_matrix, indices = load_phi(data)
+
 for combination in combinations:
-
-    if str(combination) in list(training_results.keys()):
-        if len(list(filter(None, training_results[str(combination)]))) >= 10:
-            print("SKIPPING COMBINATION: %s" % str(combination))
-            continue
-
-        training_results[str(combination)]['acc'] = list(filter(None, training_results[str(combination)]['acc']))
-        training_results[str(combination)]['f1'] = list(filter(None, training_results[str(combination)]['f1']))
-        # training_results[str(combination)]['auc'] = list(filter(None, training_results[str(combination)]['auc']))
-
-        for idx, item in enumerate(training_results[str(combination)]['acc']):
-            accBest[hParamsPolynomial['name']][idx] = item
-            f1_best[hParamsPolynomial['name']][idx] = training_results[str(combination)]['f1'][idx]
-            # roc_best[hParamsPolynomial['name']][idx] = training_results[str(combination)]['auc'][idx]
-
-    else:
-        training_results[str(combination)] = {"acc": [], "f1": []}
+    #
+    # if str(combination) in list(training_results.keys()):
+    #     if len(list(filter(None, training_results[str(combination)]))) >= 10:
+    #         print("SKIPPING COMBINATION: %s" % str(combination))
+    #         continue
+    #
+    #     training_results[str(combination)]['acc'] = list(filter(None, training_results[str(combination)]['acc']))
+    #     training_results[str(combination)]['f1'] = list(filter(None, training_results[str(combination)]['f1']))
+    #     # training_results[str(combination)]['auc'] = list(filter(None, training_results[str(combination)]['auc']))
+    #
+    #     for idx, item in enumerate(training_results[str(combination)]['acc']):
+    #         accBest[hParamsPolynomial['name']][idx] = item
+    #         f1_best[hParamsPolynomial['name']][idx] = training_results[str(combination)]['f1'][idx]
+    #         # roc_best[hParamsPolynomial['name']][idx] = training_results[str(combination)]['auc'][idx]
+    #
+    # else:
 
     if doPrint:
         print("COMBINATION: %s" % str(combination))
 
-    for split in range(len(training_results[str(combination)]['acc']), nDataSplits):
+    for split in range(nDataSplits):
         data.get_split(ratioTrain, ratioValid)
+        data.reduce_dim(indices)
 
         ###################################################################
         #                                                                   #
@@ -443,15 +509,15 @@ for combination in combinations:
         # enforced connectedness, for instance)
         nNodes = phi_matrix.shape[0]
 
-        nodesToKeep = np.array(nodes_to_keep)
-        # And re-update the data (keep only the nodes that are kept after isolated
-        # nodes or nodes to make the graph connected have been removed)
-        data.samples['train']['signals'] = \
-            data.samples['train']['signals'][:, nodes_to_keep]
-        data.samples['valid']['signals'] = \
-            data.samples['valid']['signals'][:, nodes_to_keep]
-        data.samples['test']['signals'] = \
-            data.samples['test']['signals'][:, nodes_to_keep]
+        # nodesToKeep = np.array(nodes_to_keep)
+        # # And re-update the data (keep only the nodes that are kept after isolated
+        # # nodes or nodes to make the graph connected have been removed)
+        # data.samples['train']['signals'] = \
+        #     data.samples['train']['signals'][:, nodes_to_keep]
+        # data.samples['valid']['signals'] = \
+        #     data.samples['valid']['signals'][:, nodes_to_keep]
+        # data.samples['test']['signals'] = \
+        #     data.samples['test']['signals'][:, nodes_to_keep]
 
         # Once data is completely formatted and in appropriate fashion, change its
         # type to torch and move it to the appropriate device
@@ -589,6 +655,13 @@ for combination in combinations:
                              nEpochs=nEpochs, batchSize=batchSize,
                              **trainingOptions)
 
+        # TRAIN SVM
+        X, y = data.getSamples('train')
+        X = preprocessing.scale(X)
+
+        svc = SVC()
+
+        svc.fit(X, y)
         # ###################################################################
         # #                                                                   #
         # #                    EMBEDDING HOOK                                 #
@@ -651,6 +724,15 @@ for combination in combinations:
                 # We compute the accuracy
                 thisAccBest = data.evaluate(yHatTest, yTest)
 
+                yHatTest = np.round(yHatTest)
+                yHatTest = yHatTest.squeeze(1).numpy()
+
+                res = get_results(yHatTest, yTest.numpy())
+                res['acc'] = thisAccBest
+                training_results.append(res)
+
+                svc_result = evaluate_svc(svc, data)
+                svc_results.append(svc_result)
             if doPrint:
                 print("%s: %4.2f%%" % (key, thisAccBest * 100.), flush=True)
 
@@ -670,7 +752,8 @@ for combination in combinations:
                 # This is so that we can later compute a total accuracy with
                 # the corresponding error.
 
-        training_results[str(combination)] = list(accBest['PolynomiGNN'])
-
         with open(file_name, 'w+') as outfile:
             json.dump(training_results, outfile)
+
+        with open(svc_file_name, 'w+') as outfile:
+            json.dump(svc_results, outfile)
