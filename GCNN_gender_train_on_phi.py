@@ -383,7 +383,7 @@ data = Utils.dataTools.AutorshipGender(ratioTrain, ratioValid, dataPath)
 #                                                                   #
 #####################################################################
 
-def load_phi(data, phi_matrix_path='EdgeVariGNN_nationality_phi.txt', percentage=0.3, eps=0.0001):
+def load_phi(data, phi_matrix_path='EdgeVariGNN_nationality_phi.txt', percentage=0.4, eps=0.0001):
     with open(phi_matrix_path, 'r') as f:
         file = json.load(f)
 
