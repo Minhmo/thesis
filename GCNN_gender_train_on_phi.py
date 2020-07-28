@@ -90,7 +90,7 @@ all_author_names = ['abbott', 'stevenson', 'alcott', 'alger', 'allen', 'austen',
                     'garland', 'hawthorne', 'james', 'melville', 'page', 'thoreau', 'twain', 'doyle', 'irving', 'poe',
                     'jewett', 'wharton']
 
-BASE_FILE_NAME = 'GCNN_gender_phi_results'
+BASE_FILE_NAME = 'gender_phi_results_{0}_{1}_{2}.txt'
 
 thisFilename = 'authorEdgeNets'  # This is the general name of all related files
 
@@ -110,9 +110,6 @@ doFigs = True  # Plot some figures (this only works if doSaveVars is True)
 # \\\ Create .txt to store the values of the setting parameters for easier
 # reference when running multiple experiments
 today = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-
-file_name = BASE_FILE_NAME + ".txt"
-svc_file_name = "SVC_gender_phi_results.txt"
 
 # Append date and time of the run to the directory, to avoid several runs of
 # overwritting each other.
@@ -156,8 +153,8 @@ saveSeed(randomStates, saveDir)
 # sarah orne 'jewett', edith 'wharton'
 
 
-nFeatures = [1, 32]  # F: number of output features of the only layer
-nShifts = [4]  # K: number of shift tap
+nFeatures, nShifts = ([2, 4, 8, 16, 32], [2, 4, 6, 8])
+combinations = list(itertools.product(nFeatures, nShifts))
 
 # set training params
 nClasses = 1  # Either authorName or not
@@ -263,6 +260,7 @@ modelList = []
 # \\\\\\\\\\\\
 
 if doPolynomialGNN:
+
     hParamsPolynomial = {'name': 'PolynomiGNN', 'F': nFeatures, 'K': nShifts, 'bias': True, 'sigma': nn.ReLU,
                          'rho': gml.NoPool, 'alpha': [1], 'dimLayersMLP': [nClasses]}  # Hyperparameters (hParams)
 
@@ -357,15 +355,14 @@ trainingOptions['validationInterval'] = validationInterval
 #                    DATA SPLIT REALIZATION                         #
 #                                                                   #
 #####################################################################
-F = [nFeatures]
-K = [nShifts]
-# F = [16, 32, 64]
-# K = [1, 2, 3, 4, 5, 6, 7, 8, 9, 1]
 
-combinations = list(itertools.product(F, K))
+percentage = 0.4
 
-training_results = []
+training_results = {}
 svc_results = []
+
+file_name = BASE_FILE_NAME.format("GCNN", str(percentage), 'search')
+svc_file_name = BASE_FILE_NAME.format("SVM", str(percentage), 'search')
 
 # Start generating a new data split for each of the number of data splits that
 # we previously specified
@@ -468,7 +465,7 @@ def evaluate_svc(arch, data):
 
 # %%##################################################################
 
-phi_matrix, indices = load_phi(data)
+phi_matrix, indices = load_phi(data, percentage=percentage)
 
 for combination in combinations:
     #
@@ -487,6 +484,7 @@ for combination in combinations:
     #         # roc_best[hParamsPolynomial['name']][idx] = training_results[str(combination)]['auc'][idx]
     #
     # else:
+    training_results[str(combination)] = []
 
     if doPrint:
         print("COMBINATION: %s" % str(combination))
@@ -573,8 +571,8 @@ for combination in combinations:
             # ARCHITECTURE #
             ################
             # Override parameters with grid parameters.
-            hParamsPolynomial['F'] = nFeatures
-            hParamsPolynomial['K'] = nShifts
+            hParamsPolynomial['F'] = [1, combination[0]]
+            hParamsPolynomial['K'] = [combination[1]]
             hParamsPolynomial['N'] = [nNodes]
 
             if doPrint:
@@ -729,10 +727,10 @@ for combination in combinations:
 
                 res = get_results(yHatTest, yTest.numpy())
                 res['acc'] = thisAccBest
-                training_results.append(res)
+                training_results[str(combination)].append(res)
 
-                svc_result = evaluate_svc(svc, data)
-                svc_results.append(svc_result)
+                # svc_result = evaluate_svc(svc, data)
+                # svc_results.append(svc_result)
             if doPrint:
                 print("%s: %4.2f%%" % (key, thisAccBest * 100.), flush=True)
 
@@ -755,5 +753,5 @@ for combination in combinations:
         with open(file_name, 'w+') as outfile:
             json.dump(training_results, outfile)
 
-        with open(svc_file_name, 'w+') as outfile:
-            json.dump(svc_results, outfile)
+        # with open(svc_file_name, 'w+') as outfile:
+        #     json.dump(svc_results, outfile)

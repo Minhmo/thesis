@@ -155,6 +155,7 @@ def fashion_scatter(x, colors, name=""):
 
 def analyze_linear_results(json):
     results = {}
+    results_std = {}
 
     for author in all_author_names:
         temp = json[author]
@@ -162,12 +163,15 @@ def analyze_linear_results(json):
         if isinstance(temp, dict):
             means_knn = [np.mean(v) for k, v in temp.items()]
             max_acc = np.max(means_knn)
+            std = [np.std(v) for k, v in temp.items()][0]
         else:
-            max_acc = np.max(temp)
+            max_acc = np.mean(temp)
+            std = np.std(temp)
 
         results[author] = max_acc
+        results_std[author] = std
 
-    return results
+    return results, results_std
 
 
 # %%##################################################################
@@ -217,8 +221,8 @@ svm_file = open('results/svm_results.txt', 'r')
 knn_search_results = json.load(knn_file)
 svm_search_results = json.load(svm_file)
 
-knn_results = analyze_linear_results(knn_search_results)
-svm_results = analyze_linear_results(svm_search_results)
+knn_results, knn_std = analyze_linear_results(knn_search_results)
+svm_results, svm_std = analyze_linear_results(svm_search_results)
 
 knn_file.close()
 svm_file.close()
@@ -250,15 +254,7 @@ all_author_names = ['abbott', 'stevenson', 'alcott', 'alger', 'allen', 'austen',
                     'garland', 'hawthorne', 'james', 'melville', 'page', 'thoreau', 'twain', 'doyle', 'irving', 'poe',
                     'jewett', 'wharton']
 
-FILE_NAME_NATIONALITY = 'GNN_Polynomial_nationality_results_20200310112333.txt'
 FILE_NAME_GENDER = 'results/gender/GNN_Polynomial_gender_results_20200312161323.txt'
-
-with open(FILE_NAME_NATIONALITY, 'r') as f:
-    train_result = json.load(f)
-    nationality_results = {'acc': np.mean(train_result['(64, 4)']['acc']),
-                           'f1': np.mean(train_result['(64, 4)']['f1']),
-                           'auc': np.mean(train_result['(64, 4)']['auc']),
-                           "std": np.std(train_result['(64, 4)']['acc'])}
 
 with open(FILE_NAME_GENDER, 'r') as f:
     train_result = json.load(f)
@@ -292,6 +288,32 @@ with open(FILE_NAME_GENDER, 'r') as f:
                       'best_auc': best_auc,
                       'best_comb': best_comb,
                       'std': std}
+
+    # %%##################################################################
+    # Export nationality results
+
+    NATIONALITY_GNN = 'results/nationality/GCNN_nationality_results_20200310112333.txt'
+    NATIONALITY_EDG = 'results/nationality/EdgeNet_nationality_search_results_.txt'
+    NATIONALITY_SVM = 'results/nationality/svm_results_nationality.txt'
+    NATIONALITY_HYB = 'results/nationality/Edge_GCNN_nationality_results_.txt'
+
+    files = {'Edgenet': NATIONALITY_EDG, 'GCNN': NATIONALITY_GNN, 'Edge-GCNN': NATIONALITY_HYB, 'SVM': NATIONALITY_SVM}
+
+    nationality_results = {}
+
+    for k, v in files.items():
+        with open(v, 'r') as f:
+            train_result = json.load(f)
+
+            if k == 'SVM':
+                nationality_results[k] = np.mean(train_result)
+            else:
+                nationality_results[k] = {'acc': np.mean(train_result[list(train_result.keys())[0]]['acc']),
+                                          'f1': np.mean(train_result[list(train_result.keys())[0]]['f1']),
+                                          'auc': np.mean(train_result[list(train_result.keys())[0]]['auc']),
+                                          "std": np.std(train_result[list(train_result.keys())[0]]['acc'])}
+
+    df_nationality = pd.DataFrame(nationality_results)
 
     # %%##################################################################
     # Analyse GAT and GCAT results on AA
@@ -482,12 +504,15 @@ model_comparison_df['best_comb_ff'] = [v['best_comb'] for k, v in two_feedforwar
 
 # add linear model results
 model_comparison_df['SVM'] = [v for k, v in svm_results.items()]
+model_comparison_df['SVM std'] = [v for k, v in svm_std.items()]
 model_comparison_df['KNN'] = [v for k, v in knn_results.items()]
+model_comparison_df['KNN std'] = [v for k, v in knn_std.items()]
 
 model_comparison_df['GCNN with random SO'] = [v['best_acc'] for v in GCNN_random_so_results.values()]
 
 # add 2 layer GCNN results
 model_comparison_df['2l GCNN'] = [v['best_acc'] for k, v in GCNN_2layer_results.items()]
+model_comparison_df['2l GCNN std'] = [v['std'] for k, v in GCNN_2layer_results.items()]
 model_comparison_df['best_combination_2layer'] = [v['best_comb'] for k, v in GCNN_2layer_results.items()]
 
 # add GCNN results using PHI as SO
@@ -500,20 +525,22 @@ model_comparison_df['non_zero_el_perc_phi'] = [v['no_of_words'] for k, v in GCNN
 model_comparison_df['GAT'] = [v['best_acc'] for k, v in GAT_RES.items()]
 model_comparison_df['GCAT'] = [v['best_acc'] for k, v in GCAT_RES.items()]
 model_comparison_df['EdgeNets (best GCNN)'] = [v['best_acc'] for k, v in EDGE_RES.items()]
+model_comparison_df['EdgeNets (best GCNN) std'] = [v['std'] for k, v in EDGE_RES.items()]
 model_comparison_df['EdgeNets (HP search)'] = [v['best_acc'] for k, v in EDGE_GRID_RES.items()]
+model_comparison_df['EdgeNets (HP search) std'] = [v['std'] for k, v in EDGE_GRID_RES.items()]
 model_comparison_df['Edge_search_best_comb'] = [v['best_comb'] for k, v in EDGE_GRID_RES.items()]
 model_comparison_df['Edge_best_gcnn_std'] = [v['std'] for k, v in EDGE_RES.items()]
 
-model_comparison_df = model_comparison_df[
-    ['best_acc', 'GAT', 'GCAT', 'EdgeNets (HP search)', 'Edge_search_best_comb', 'EdgeNets (best GCNN)',
-     'Edge_best_gcnn_std', 'GCNN with random SO', 'GCNN with extracted SO (Acc)',
-     'GCNN with extracted SO (Perc)',
-     'non_zero_el_acc_phi',
-     'non_zero_el_perc_phi',
-     '2l GCNN',
-     'Feed forward', 'SVM', 'KNN',
-     'best_comb',
-     'best_combination_2layer', 'best_comb_ff', 'std']]
+# model_comparison_df = model_comparison_df[
+#     ['best_acc', 'GAT', 'GCAT', 'EdgeNets (HP search)', 'Edge_search_best_comb', 'EdgeNets (best GCNN)',
+#      'Edge_best_gcnn_std', 'GCNN with random SO', 'GCNN with extracted SO (Acc)',
+#      'GCNN with extracted SO (Perc)',
+#      'non_zero_el_acc_phi',
+#      'non_zero_el_perc_phi',
+#      '2l GCNN',
+#      'Feed forward', 'SVM', 'KNN',
+#      'best_comb',
+#      'best_combination_2layer', 'best_comb_ff', 'std']]
 
 # %%##################################################################
 # Load data
@@ -932,6 +959,7 @@ df_unique_popular['Unique'] = [v['best_acc'] for k, v in GCNN_UNIQUE_results.ite
 
 # %%##################################################################
 # Correlation between 2nd eigenvalue and accuracy
+plt.style.use('fivethirtyeight')
 
 with open('author_info.json', 'r') as f:
     author_info = json.load(f)
@@ -941,19 +969,23 @@ with open('author_info.json', 'r') as f:
                                                   data={'Algebraic connectivity': [x['eigenvalues_avg'][1] for x in
                                                                                    author_info.values()],
                                                         'Accuracy': model_comparison_df['best_acc'].tolist()})
-    bx = sns.lmplot(x="Algebraic connectivity", y="Accuracy", data=df_best_acc_fiedler_eigenvalue)
+    bx = sns.relplot(x="Algebraic connectivity", y="Accuracy", data=df_best_acc_fiedler_eigenvalue)
+    plt.plot(np.unique(df_best_acc_fiedler_eigenvalue['Algebraic connectivity']), np.poly1d(
+        np.polyfit(df_best_acc_fiedler_eigenvalue['Algebraic connectivity'], df_best_acc_fiedler_eigenvalue['Accuracy'],
+                   1))(np.unique(df_best_acc_fiedler_eigenvalue['Algebraic connectivity'])))
+
     plt.show()
 
-    df_best_acc_fiedler_eigenvalue['Filter taps'] = [eval(it['best_comb'])[1][0] for it in GCNN_results.values()]
-    bx = sns.lmplot(x="Algebraic connectivity", y="Filter taps", data=df_best_acc_fiedler_eigenvalue)
-    plt.show()
-
-    df_best_acc_fiedler_eigenvalue['Diameter'] = [x['diameter'] for x in author_info.values()]
-    bx = sns.relplot(x="Diameter", y="Filter taps", data=df_best_acc_fiedler_eigenvalue)
-    plt.show()
-
-    bx = sns.relplot(x="Diameter", y="Accuracy", data=df_best_acc_fiedler_eigenvalue)
-    plt.show()
+    # df_best_acc_fiedler_eigenvalue['Filter taps'] = [eval(it['best_comb'])[1][0] for it in GCNN_results.values()]
+    # bx = sns.lmplot(x="Algebraic connectivity", y="Filter taps", data=df_best_acc_fiedler_eigenvalue)
+    # plt.show()
+    #
+    # df_best_acc_fiedler_eigenvalue['Diameter'] = [x['diameter'] for x in author_info.values()]
+    # bx = sns.relplot(x="Diameter", y="Filter taps", data=df_best_acc_fiedler_eigenvalue)
+    # plt.show()
+    #
+    # bx = sns.relplot(x="Diameter", y="Accuracy", data=df_best_acc_fiedler_eigenvalue)
+    # plt.show()
 
 # %%##################################################################
 # correlation between accuracy and non-zero els of matrix
@@ -989,61 +1021,97 @@ GENDER_LINEAR_KNN = 'results/gender/knn_results_gender.txt'
 GENDER_LINEAR_SVM = 'results/gender/svm_results_gender.txt'
 GENDER_MEN_SO = 'results/gender/GCNN_gender_male_SO_20200410105100.txt'
 GENDER_EDGE_GCNN = 'results/gender/Edge_GCNN_gender_20200409191412.txt'
-GENDER_PHI_PERC = 'results/gender/GCNN_gender_phi_perc_results_20200409184507'
+GENDER_PHI_PERC = 'results/gender/GCNN_gender_phi_results_03.txt'
+GENDER_PHI_SVM = 'results/gender/SVC_gender_phi_results_03.txt'
 
 df_gender_comparison = pd.DataFrame(index=['best_acc', 'best_comb', 'std', 'best_f1', 'best_auc'])
+
+gender_box_plot_data = []
+gender_box_plot_data_fp = []
+
+def get_avg(data):
+    acc = np.average([item['acc'] for item in data])
+    f1 = np.average([item['f1'] for item in data])
+    auc = np.average([item['auc'] for item in data])
+    prec = np.average([item['prec'] for item in data])
+    std = np.std([item['acc'] for item in data])
+
+    return acc, f1, auc, prec, std
+
 
 with open(GENDER_EDGE, 'r') as f:
     train_result = json.load(f)
     best_acc, best_comb, std, best_f1, best_auc = analyse_GNN_results_extra(train_result)
     result = {'best_acc': best_acc, 'best_comb': best_comb, 'std': std, 'best_f1': best_f1, 'best_auc': best_auc}
-    df_gender_comparison['Edge_net'] = list(result.values())
+    df_gender_comparison['EdgeNet'] = list(result.values())
+    gender_box_plot_data.append(train_result[best_comb]['acc'])
 
 with open(GENDER_GCNN_2L, 'r') as f:
     train_result = json.load(f)
     best_acc, best_comb, std, best_f1, best_auc = analyse_GNN_results_extra(train_result)
     result = {'best_acc': best_acc, 'best_comb': best_comb, 'std': std, 'best_f1': best_f1, 'best_auc': best_auc}
-    df_gender_comparison['GCNN_2_layers'] = list(result.values())
+    df_gender_comparison['GCNN (2L)'] = list(result.values())
+    gender_box_plot_data.append(train_result[best_comb]['acc'])
 
 with open(GENDER_GCNN, 'r') as f:
     train_result = json.load(f)
     best_acc, best_comb, std, best_f1, best_auc = analyse_GNN_results_extra(train_result)
     result = {'best_acc': best_acc, 'best_comb': best_comb, 'std': std, 'best_f1': best_f1, 'best_auc': best_auc}
     df_gender_comparison['GCNN'] = list(result.values())
-
-with open(GENDER_LINEAR_KNN, 'r') as f:
-    train_result = json.load(f)
-    result = analyze_linear_results(train_result)
-    result = {'best_acc': result['abbott'], 'best_comb': '', 'std': '', 'best_f1': '', 'best_auc': ''}
-    df_gender_comparison['GENDER_LINEAR_KNN'] = list(result.values())
+    gender_box_plot_data.append(train_result[best_comb]['acc'])
+#
+# with open(GENDER_LINEAR_KNN, 'r') as f:
+#     train_result = json.load(f)
+#     result = analyze_linear_results(train_result)
+#     result = {'best_acc': result['abbott'], 'best_comb': '', 'std': '', 'best_f1': '', 'best_auc': ''}
+#     df_gender_comparison['GENDER_LINEAR_KNN'] = list(result.values())
 
 with open(GENDER_LINEAR_SVM, 'r') as f:
     train_result = json.load(f)
-    result = analyze_linear_results(train_result)
-    result = {'best_acc': result['abbott'], 'best_comb': '', 'std': '', 'best_f1': '', 'best_auc': ''}
-    df_gender_comparison['GENDER_LINEAR_SVM'] = list(result.values())
+    result, result_std = analyze_linear_results(train_result)
+    result = {'best_acc': result['abbott'], 'best_comb': '', 'std': result_std['abbott'], 'best_f1': '', 'best_auc': ''}
+    df_gender_comparison['SVM'] = list(result.values())
+    gender_box_plot_data.append(train_result['abbott'])
 
-with open(GENDER_MEN_SO, 'r') as f:
-    train_result = json.load(f)
-    best_acc, best_comb, std, best_f1, best_auc = analyse_GNN_results_extra(train_result)
-    result = {'best_acc': best_acc, 'best_comb': best_comb, 'std': std, 'best_f1': best_f1, 'best_auc': best_auc}
-    df_gender_comparison['GENDER_MEN_SO'] = list(result.values())
+# with open(GENDER_MEN_SO, 'r') as f:
+#     train_result = json.load(f)
+#     best_acc, best_comb, std, best_f1, best_auc = analyse_GNN_results_extra(train_result)
+#     result = {'best_acc': best_acc, 'best_comb': best_comb, 'std': std, 'best_f1': best_f1, 'best_auc': best_auc}
+#     df_gender_comparison['GENDER_MEN_SO'] = list(result.values())
 #
 with open(GENDER_EDGE_GCNN, 'r') as f:
     train_result = json.load(f)
     best_acc, best_comb, std, best_f1, best_auc = analyse_GNN_results_extra(train_result)
     result = {'best_acc': best_acc, 'best_comb': best_comb, 'std': std, 'best_f1': best_f1, 'best_auc': best_auc}
-    df_gender_comparison['GENDER_EDGE_GCNN'] = list(result.values())
-#
-# with open(GENDER_PHI_PERC, 'r') as f:
-#     train_result = json.load(f)
-#     best_acc, best_comb, std, best_f1, best_auc = analyse_GNN_results_extra(train_result)
-#     result = {'best_acc': best_acc, 'best_comb': best_comb, 'std': std, 'best_f1': best_f1, 'best_auc': best_auc}
-#     df_gender_comparison['GENDER_PHI_PERC'] = list(result.values())
+    df_gender_comparison['Edg-GCNN'] = list(result.values())
+    gender_box_plot_data.append(train_result[best_comb]['acc'])
 
+with open(GENDER_PHI_PERC, 'r') as f:
+    train_result = json.load(f)
+    best_acc, best_f1, best_auc, prec, std = get_avg(train_result)
+    result = {'best_acc': best_acc, 'best_comb': 'test', 'std': std, 'best_f1': best_f1, 'best_auc': best_auc}
+    df_gender_comparison['GCNN (FP)'] = list(result.values())
+    gender_box_plot_data_fp.append([x['acc'] for x in train_result])
+
+
+with open(GENDER_PHI_SVM, 'r') as f:
+    train_result = json.load(f)
+    best_acc, best_f1, best_auc, prec, std = get_avg(train_result)
+    result = {'best_acc': best_acc, 'best_comb': 'test', 'std': std, 'best_f1': best_f1, 'best_auc': best_auc}
+    df_gender_comparison['SVM (FP)'] = list(result.values())
+    gender_box_plot_data_fp.append([x['acc'] for x in train_result])
+
+
+gender_box_plot_labels = list(df_gender_comparison.columns)
+gender_box_plot_labels_fp = ['GCNN', 'SVM']
+
+import plot_tools
+
+# plot_tools.box_plot_with_dist(gender_box_plot_labels, gender_box_plot_data, 'Gender Classification', 'Accuracy')
+plot_tools.box_plot_with_dist(gender_box_plot_labels_fp, gender_box_plot_data_fp, 'Gender Classification (FP)', 'Accuracy')
 # create a dataframe with info from GCNN and FF2
 # df_gender_comparison = df_gender_comparison.T
-
+df_gender_comparison = df_gender_comparison.drop(df_gender_comparison.index[1])
 
 # %%##################################################################
 # Extract SO for gender classification from Edgenets PHI matrix
@@ -1187,17 +1255,16 @@ model_comparison_df['GCNN'] = model_comparison_df['best_acc'].to_list()
 df_one_vs_all_results = pd.DataFrame()
 
 df_one_vs_all_results = model_comparison_df[
-    ['GCNN', 'GAT', 'GCAT', 'EdgeNets (HP search)', 'EdgeNets (best GCNN)',
-     '2l GCNN',
-     'Feed forward', 'SVM', 'KNN']]
+    ['GCNN', 'std', 'EdgeNets (HP search)', 'EdgeNets (HP search) std', 'EdgeNets (best GCNN)',
+     'EdgeNets (best GCNN) std',
+     '2l GCNN', '2l GCNN std',
+     'SVM', 'SVM std', 'KNN', 'KNN std']]
 
-# df_one_vs_all_results = model_comparison_df[
-#     ['GCNN', 'GAT', 'GCAT', 'EdgeNets (HP search)', 'EdgeNets (best GCNN)',
-#      'GCNN with extracted SO (Acc)',
-#      'GCNN with extracted SO (Perc)',
-#      '2l GCNN',
-#      'Feed forward', 'SVM', 'KNN']]
+df_one_vs_all_results = df_one_vs_all_results.round(2)
+df_one_vs_all_results.index = df_one_vs_all_results.index.str.capitalize()
 
+# pd.set_option('precision', 2)
+df_one_vs_all_results.to_latex("results/latex_tables/one-vs-all.tex")
 
 # %%##################################################################
 # Compare one-vs-one, one-vs-one-fingerprint and one-vs-all-fingerprint
@@ -1233,8 +1300,8 @@ for k, v in files.items():
         results[k] = {}
         for author in data.keys():
             acc, f1, auc, prec, std = get_author_avg(data[author])
-            # results[k][author] = {acc, f1, auc, prec}
-            results[k][author] = acc
+            results[k][author] = {'acc': acc, 'f1': f1, 'auc': auc, 'prec': prec, 'std': std}
+            # results[k][author] = acc
 
 results_feature_search = {}
 feature_search_file_path = "results/one_vs_one/One_vs_one_fingerprint_feature_search_granularity_results_GCNN.json"
@@ -1258,10 +1325,14 @@ with open(feature_search_file_path, 'r') as outfile:
 # one-vs-one fingerpring search results
 
 one_vs_one_base = 'results/one_vs_one/{}'
+one_vs_all_base = 'results/one_vs_all/{}'
+
 results_feature_search = {}
 files = {
     "1v1 FP GCNN": one_vs_one_base.format('One_vs_one_fingerprint_feature_search_results_GCNN.json'),
-    "1v1 FP SVC": one_vs_one_base.format('One_vs_one_fingerprint_feature_search_results_SVC.json')
+    "1v1 FP SVC": one_vs_one_base.format('One_vs_one_fingerprint_feature_search_results_SVC.json'),
+    "1vAll FP GCNN": one_vs_all_base.format('One_vs_all_fingerprint_feature_search_results_GCNN.json'),
+    "1vAll FP SVC": one_vs_all_base.format('One_vs_all_fingerprint_feature_search_results_SVC.json'),
 }
 
 for k, v in files.items():
@@ -1284,6 +1355,169 @@ for k, v in files.items():
                                                   "author": author})
 
 # %%##################################################################
+# 1v1 fingerprint table
+
+pd.set_option('precision', 2)
+
+df_1v1_fp = pd.DataFrame(
+    list(results_feature_search['1v1 FP GCNN']))
+
+is_03 = df_1v1_fp['perc'] == '0.3'
+
+df_1v1_fp = df_1v1_fp[is_03];
+df_1v1_fp = df_1v1_fp[['acc', 'std', 'author']];
+df_1v1_fp['type'] = 'GCNN'
+
+df_1v1_fp_svm = pd.DataFrame(
+    list(results_feature_search['1v1 FP SVC']))
+
+is_03 = df_1v1_fp_svm['perc'] == '0.3'
+
+df_1v1_fp_svm = df_1v1_fp_svm[is_03];
+df_1v1_fp_svm = df_1v1_fp_svm[['acc', 'std', 'author']];
+df_1v1_fp_svm['type'] = 'SVM'
+
+# df_1v1_fp['SVM'] = list(df_1v1_fp_svm['acc'])
+# df_1v1_fp['SVM std'] = list(df_1v1_fp_svm['std'])
+# df_1v1_fp['type'] = 'SVM'
+#
+# df_1v1_fp.index = df_1v1_fp['author']
+
+df_1v1_fp = df_1v1_fp.append(df_1v1_fp_svm)
+df_1v1_fp['Error'] = 1 - df_1v1_fp['acc']
+# # df_1v1_fp = df_1v1_fp[['acc', 'SVM']];
+# df_1v1_fp.index = df_1v1_fp.index.str.capitalize()
+df_1v1_fp['author'] = df_1v1_fp['author'].str.capitalize()
+
+df_1v1_fp = df_1v1_fp.sort_values(by=['author'])
+df_1v1_fp = df_1v1_fp.round(2)
+df_1v1_fp = df_1v1_fp.rename(columns={"author": "Author"})
+
+df_1v1_fp_1 = df_1v1_fp.iloc[:10, :]
+df_1v1_fp_2 = df_1v1_fp.iloc[10:20, :]
+df_1v1_fp_3 = df_1v1_fp.iloc[20:30, :]
+df_1v1_fp_4 = df_1v1_fp.iloc[30:, :]
+
+import plot_tools
+
+labels = df_1v1_fp_1[df_1v1_fp_1['type'] == 'GCNN']['Author'].to_list()
+gcnn_means = df_1v1_fp_1[df_1v1_fp_1['type'] == 'GCNN']['Error'].to_list()
+SVM_means = df_1v1_fp_1[df_1v1_fp_1['type'] == 'SVM']['Error'].to_list()
+gcnn_std = df_1v1_fp_1[df_1v1_fp_1['type'] == 'GCNN']['std'].to_list()
+SVM_std = df_1v1_fp_1[df_1v1_fp_1['type'] == 'SVM']['std'].to_list()
+
+plot_tools.stacked_bar_plot(labels, gcnn_means, SVM_means, gcnn_std, SVM_std, 'GCNN', 'SVM')
+
+
+labels = df_1v1_fp_2[df_1v1_fp_2['type'] == 'GCNN']['Author'].to_list()
+gcnn_means = df_1v1_fp_2[df_1v1_fp_2['type'] == 'GCNN']['Error'].to_list()
+SVM_means = df_1v1_fp_2[df_1v1_fp_2['type'] == 'SVM']['Error'].to_list()
+gcnn_std = df_1v1_fp_2[df_1v1_fp_2['type'] == 'GCNN']['std'].to_list()
+SVM_std = df_1v1_fp_2[df_1v1_fp_2['type'] == 'SVM']['std'].to_list()
+
+plot_tools.stacked_bar_plot(labels, gcnn_means, SVM_means, gcnn_std, SVM_std, 'GCNN', 'SVM')
+
+labels = df_1v1_fp_3[df_1v1_fp_3['type'] == 'GCNN']['Author'].to_list()
+gcnn_means = df_1v1_fp_3[df_1v1_fp_3['type'] == 'GCNN']['Error'].to_list()
+SVM_means = df_1v1_fp_3[df_1v1_fp_3['type'] == 'SVM']['Error'].to_list()
+gcnn_std = df_1v1_fp_3[df_1v1_fp_3['type'] == 'GCNN']['std'].to_list()
+SVM_std = df_1v1_fp_3[df_1v1_fp_3['type'] == 'SVM']['std'].to_list()
+
+plot_tools.stacked_bar_plot(labels, gcnn_means, SVM_means, gcnn_std, SVM_std, 'GCNN', 'SVM')
+
+
+labels = df_1v1_fp_4[df_1v1_fp_4['type'] == 'GCNN']['Author'].to_list()
+gcnn_means = df_1v1_fp_4[df_1v1_fp_4['type'] == 'GCNN']['Error'].to_list()
+SVM_means = df_1v1_fp_4[df_1v1_fp_4['type'] == 'SVM']['Error'].to_list()
+gcnn_std = df_1v1_fp_4[df_1v1_fp_4['type'] == 'GCNN']['std'].to_list()
+SVM_std = df_1v1_fp_4[df_1v1_fp_4['type'] == 'SVM']['std'].to_list()
+
+plot_tools.stacked_bar_plot(labels, gcnn_means, SVM_means, gcnn_std, SVM_std, 'GCNN', 'SVM')
+
+# %%##################################################################
+# 1 vs all fingerprint table
+
+pd.set_option('precision', 2)
+
+df_1vAll_fp = pd.DataFrame(
+    list(results_feature_search['1vAll FP GCNN']))
+
+is_03 = df_1vAll_fp['perc'] == '0.2'
+
+df_1vAll_fp = df_1vAll_fp[is_03];
+df_1vAll_fp = df_1vAll_fp[['acc', 'author']];
+
+df_1vAll_fp_svm = pd.DataFrame(
+    list(results_feature_search['1vAll FP SVC']))
+
+is_03 = df_1vAll_fp_svm['perc'] == '0.2'
+
+df_1vAll_fp_svm = df_1vAll_fp_svm[is_03];
+
+df_1vAll_fp['SVM'] = list(df_1vAll_fp_svm['acc'])
+
+df_1vAll_fp.index = df_1vAll_fp['author']
+
+df_1vAll_fp = df_1vAll_fp[['acc', 'SVM']];
+df_1vAll_fp.index = df_1vAll_fp.index.str.capitalize()
+df_1vAll_fp['author'] = df_1vAll_fp.index.str.capitalize()
+
+df_1vAll_fp = df_1vAll_fp.rename(columns={"acc": "GCNN"})
+# %%##################################################################
+# 1vs1 simple table
+pd.set_option('precision', 2)
+
+df_1v1 = pd.DataFrame()
+df_1v1['GCNN'] = [x['acc'] for x in results['1v1 GCNN'].values()]
+df_1v1['std'] = [x['std'] for x in results['1v1 GCNN'].values()]
+df_1v1.index = results['1v1 GCNN'].keys()
+
+df_1v1['SVM'] = [x['acc'] for x in results['1v1 SVM'].values()]
+df_1v1['svm std'] = [x['std'] for x in results['1v1 SVM'].values()]
+
+df_1v1['GCNN (f1)'] = [x['f1'] for x in results['1v1 GCNN'].values()]
+df_1v1['SVM (f1)'] = [x['f1'] for x in results['1v1 SVM'].values()]
+
+df_1v1.index = df_1v1.index.str.capitalize()
+
+df_1v1 = df_1v1.round(2)
+
+df_1v1.to_latex("results/latex_tables/1v1_normal.tex")
+# %%##################################################################
+# Compare 1vsAll FP vs 1vAll simple
+plt.style.use('fivethirtyeight')
+
+df_1_all_fp = pd.DataFrame(
+    list(results_feature_search['1vAll FP GCNN']))
+avg = df_1_all_fp.groupby(['perc']).mean()
+
+is_03 = df_1_all_fp['perc'] == '0.3'
+
+df_03 = df_1_all_fp[is_03];
+
+df_1_all_fp_svm = pd.DataFrame(list(results_feature_search['1vAll FP SVC']))
+avg_svm = df_1_all_fp_svm.groupby(['perc']).mean()
+avg_svm['type'] = 'SVM'
+
+avg_svm = avg_svm[['acc', 'type']]
+avg_svm = avg_svm.drop(['0.01', '0.05', '0.15', '0.35', '0.4'])
+avg_svm['Percentage'] = avg_svm.index.astype(float) * 100
+
+df_result_comp_1vAll_fp = avg[['acc']].copy()
+df_result_comp_1vAll_fp['type'] = 'GCNN'
+df_result_comp_1vAll_fp['Percentage'] = df_result_comp_1vAll_fp.index.astype(float) * 100
+# df_result_comp_1vAll_fp['acc svm'] = avg_svm['acc']
+df_result_comp_1vAll_fp = df_result_comp_1vAll_fp.drop(['0.01', '0.05', '0.15', '0.35', '0.4'])
+
+df_result_comp_1vAll_fp = df_result_comp_1vAll_fp.append(avg_svm, ignore_index=True)
+
+df_result_comp_1vAll_fp['Error'] = 1 - df_result_comp_1vAll_fp['acc']
+
+flatui = ["#9b59b6", "#3498db", "#95a5a6", "#e74c3c", "#34495e", "#2ecc71"]
+
+ax = sns.barplot(x="Percentage", y="Error", hue="type", data=df_result_comp_1vAll_fp, palette=sns.color_palette(flatui))
+
+# %%##################################################################
 # PLot box-plots for average drop for each percentage (for all authors) (GCNN)
 
 df_1_v_1_fingerprint_search = pd.DataFrame(list(results_feature_search.values())[0])
@@ -1296,12 +1530,17 @@ for idx, acc in enumerate(df_1_v_1_fingerprint_search['acc'].to_list()):
     acc_drop.append(best_acc - acc)
 
 df_1_v_1_fingerprint_search['Accuracy drop'] = acc_drop
+df_1_v_1_fingerprint_search['perc'] = df_1_v_1_fingerprint_search['perc'].astype(float) * 100
 df_1_v_1_fingerprint_search = df_1_v_1_fingerprint_search.rename(columns={"perc": "Percentage"})
 
 flatui = ["#9b59b6", "#3498db", "#95a5a6", "#e74c3c", "#34495e", "#2ecc71"]
 
-ax = sns.boxplot(x="Percentage", y="Accuracy drop", data=df_1_v_1_fingerprint_search, palette=sns.color_palette(flatui), linewidth=1.5)
-ax = sns.swarmplot(x="Percentage", y="Accuracy drop", data=df_1_v_1_fingerprint_search, palette=sns.color_palette(flatui), alpha=0.5)
+ax = sns.boxplot(x="Percentage", y="Accuracy drop", data=df_1_v_1_fingerprint_search, palette=sns.color_palette(flatui),
+                 linewidth=1.5)
+ax = sns.swarmplot(x="Percentage", y="Accuracy drop", data=df_1_v_1_fingerprint_search,
+                   palette=sns.color_palette(flatui), alpha=0.5)
+
+plt.title("1 v.s. One accuracy drop of GCNN")
 
 plt.show()
 
@@ -1322,10 +1561,16 @@ df_1_v_1_fingerprint_search = df_1_v_1_fingerprint_search.rename(columns={"perc"
 
 flatui = ["#9b59b6", "#3498db", "#95a5a6", "#e74c3c", "#34495e", "#2ecc71"]
 
-ax = sns.boxplot(x="Percentage", y="Accuracy drop", data=df_1_v_1_fingerprint_search, palette=sns.color_palette(flatui), linewidth=1.5)
-ax = sns.swarmplot(x="Percentage", y="Accuracy drop", data=df_1_v_1_fingerprint_search, palette=sns.color_palette(flatui), alpha=0.5)
+ax = sns.boxplot(x="Percentage", y="Accuracy drop", data=df_1_v_1_fingerprint_search, palette=sns.color_palette(flatui),
+                 linewidth=1.5)
+ax = sns.swarmplot(x="Percentage", y="Accuracy drop", data=df_1_v_1_fingerprint_search,
+                   palette=sns.color_palette(flatui), alpha=0.5)
 
 plt.show()
+
+# %%##################################################################
+# Table for
+
 
 # Path("plots/one-vs-one/").mkdir(parents=True, exist_ok=True)
 #
