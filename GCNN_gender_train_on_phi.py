@@ -365,14 +365,14 @@ percentage = 0.4
 training_results = []
 svc_results = []
 
-file_name = BASE_FILE_NAME.format("GCNN", str(percentage), 'search')
+file_name = BASE_FILE_NAME.format("GCNN", str(percentage), '32-4')
 svc_file_name = BASE_FILE_NAME.format("SVM", str(percentage), 'search')
 
-# Start generating a new data split for each of the number of data splits that
-# we previously specified
-if path.exists(file_name) and os.stat(file_name).st_size > 0:
-    with open(file_name, 'r') as f:
-        training_results = json.load(f)
+# # Start generating a new data split for each of the number of data splits that
+# # we previously specified
+# if path.exists(file_name) and os.stat(file_name).st_size > 0:
+#     with open(file_name, 'r') as f:
+#         training_results = json.load(f)
 
 #   Load the data, which will give a specific split
 data = Utils.dataTools.AutorshipGender(ratioTrain, ratioValid, dataPath)
