@@ -209,7 +209,7 @@ beta2 = 0.999  # ADAM option only
 
 # \\\ Loss function choice
 # lossFunction = nn.CrossEntropyLoss()  # This applies a softmax before feeding
-lossFunction = nn.CrossEntropyLoss()  # This applies a softmax before feeding
+# lossFunction = nn.CrossEntropyLoss()  # This applies a softmax before feeding
 # it into the NLL, so we don't have to apply the softmax ourselves.
 
 # \\\ Overall training options
@@ -220,18 +220,7 @@ learningRateDecayRate = 0.9  # Rate
 learningRateDecayPeriod = 1  # How many epochs after which update the lr
 validationInterval = 5  # How many training steps to do the validation
 
-# \\\ Save values
-writeVarValues(varsFile,
-               {'trainer': trainer,
-                'learningRate': learningRate,
-                'beta1': beta1,
-                'lossFunction': lossFunction,
-                'nEpochs': nEpochs,
-                'batchSize': batchSize,
-                'doLearningRateDecay': doLearningRateDecay,
-                'learningRateDecayRate': learningRateDecayRate,
-                'learningRateDecayPeriod': learningRateDecayPeriod,
-                'validationInterval': validationInterval})
+
 
 #################
 # ARCHITECTURES #
@@ -311,6 +300,24 @@ else:
 # Notify:
 if doPrint:
     print("Device selected: %s" % device)
+
+nSamples = [170, 1424, 3281, 1623]
+normedWeights = [1 - (x / sum(nSamples)) for x in nSamples]
+normedWeights = torch.DoubleTensor(normedWeights).to(device)
+
+lossFunction = nn.CrossEntropyLoss(weight=normedWeights)  # This applies a softmax before feeding
+# \\\ Save values
+writeVarValues(varsFile,
+               {'trainer': trainer,
+                'learningRate': learningRate,
+                'beta1': beta1,
+                'lossFunction': lossFunction,
+                'nEpochs': nEpochs,
+                'batchSize': batchSize,
+                'doLearningRateDecay': doLearningRateDecay,
+                'learningRateDecayRate': learningRateDecayRate,
+                'learningRateDecayPeriod': learningRateDecayPeriod,
+                'validationInterval': validationInterval})
 
 # \\\ Logging options
 if doLogging:

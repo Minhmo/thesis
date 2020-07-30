@@ -88,7 +88,7 @@ all_author_names = ['abbott', 'stevenson', 'alcott', 'alger', 'allen', 'austen',
                     'garland', 'hawthorne', 'james', 'melville', 'page', 'thoreau', 'twain', 'doyle', 'irving', 'poe',
                     'jewett', 'wharton']
 
-BASE_FILE_NAME = 'GCNN_gender_nationality_phi_perc_results_'
+BASE_FILE_NAME = 'gender_nationality_fp_results'
 
 thisFilename = 'authorEdgeNets'  # This is the general name of all related files
 
@@ -108,8 +108,9 @@ doFigs = True  # Plot some figures (this only works if doSaveVars is True)
 # \\\ Create .txt to store the values of the setting parameters for easier
 # reference when running multiple experiments
 today = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+percentage = 0.4
 
-file_name = BASE_FILE_NAME + '.txt'
+file_name = BASE_FILE_NAME + "_" + str(percentage) + '.txt'
 
 # Append date and time of the run to the directory, to avoid several runs of
 # overwritting each other.
@@ -204,7 +205,7 @@ beta2 = 0.999  # ADAM option only
 
 # \\\ Loss function choice
 # lossFunction = nn.CrossEntropyLoss()  # This applies a softmax before feeding
-lossFunction = nn.CrossEntropyLoss()  # This applies a softmax before feeding
+# lossFunction = nn.CrossEntropyLoss()  # This applies a softmax before feeding
 # it into the NLL, so we don't have to apply the softmax ourselves.
 
 # \\\ Overall training options
@@ -215,18 +216,6 @@ learningRateDecayRate = 0.9  # Rate
 learningRateDecayPeriod = 1  # How many epochs after which update the lr
 validationInterval = 5  # How many training steps to do the validation
 
-# \\\ Save values
-writeVarValues(varsFile,
-               {'trainer': trainer,
-                'learningRate': learningRate,
-                'beta1': beta1,
-                'lossFunction': lossFunction,
-                'nEpochs': nEpochs,
-                'batchSize': batchSize,
-                'doLearningRateDecay': doLearningRateDecay,
-                'learningRateDecayRate': learningRateDecayRate,
-                'learningRateDecayPeriod': learningRateDecayPeriod,
-                'validationInterval': validationInterval})
 
 #################
 # ARCHITECTURES #
@@ -307,6 +296,26 @@ else:
 if doPrint:
     print("Device selected: %s" % device)
 
+
+nSamples = [170, 1424, 3281, 1623]
+normedWeights = [1 - (x / sum(nSamples)) for x in nSamples]
+normedWeights = torch.DoubleTensor(normedWeights).to(device)
+
+lossFunction = nn.CrossEntropyLoss(weight=normedWeights)  # This applies a softmax before feeding
+
+# \\\ Save values
+writeVarValues(varsFile,
+               {'trainer': trainer,
+                'learningRate': learningRate,
+                'beta1': beta1,
+                'lossFunction': lossFunction,
+                'nEpochs': nEpochs,
+                'batchSize': batchSize,
+                'doLearningRateDecay': doLearningRateDecay,
+                'learningRateDecayRate': learningRateDecayRate,
+                'learningRateDecayPeriod': learningRateDecayPeriod,
+                'validationInterval': validationInterval})
+
 # \\\ Logging options
 if doLogging:
     # If logging is on, load the tensorboard visualizer and initialize it
@@ -376,38 +385,50 @@ if path.exists(file_name) and os.stat(file_name).st_size > 0:
 #   Load the data, which will give a specific split
 data = Utils.dataTools.AutorshipGenderNationality(ratioTrain, ratioValid, dataPath)
 
+
 # %%##################################################################
 #                                                                   #
 #                    LOAD PHI MATRICES                              #
 #                                                                   #
 #####################################################################
 
-with open('EdgeVariGNN_gender_nationality_phi.txt', 'r') as f:
-    file = json.load(f)
-    phi = np.array(file['phi'])
+def load_phi(data, phi_matrix_path='EdgeVariGNN_nationality_phi.txt', percentage=0.4, eps=0.0001):
+    with open(phi_matrix_path, 'r') as f:
+        file = json.load(f)
 
-    indices_to_zero = [x for x in
-                       np.argwhere(np.abs(phi) < np.max(np.abs(phi)) - 0.2 * np.max(np.abs(phi)))]
+        phi_whole = np.array(file['phi'])
+        data.reduce_dim(file['nodes'])
 
-    for x, y in indices_to_zero:
-        phi[x, y] = 0
+        indices_to_zero = np.array([x for x in
+                                    np.argwhere(
+                                        np.abs(phi_whole) - np.max(np.abs(phi_whole)) + percentage * np.max(
+                                            np.abs(phi_whole)) < eps)])
 
-    phi_matrix = np.copy(phi)
-    nodes_to_keep = np.array(file['nodes'])
-    function_words = np.array(data.functionWords)
+        # indices_to_zero = np.array([x for x in
+        #                             np.argwhere(
+        #                                 np.logical_not(np.isclose(np.abs(phi_whole),
+        #                                                           np.max(np.abs(phi_whole)) - percentage * np.max(
+        #                                                               np.abs(phi_whole)))))])
 
-nonzero_el_count = np.count_nonzero(phi_matrix)
+        for x, y in indices_to_zero:
+            phi_whole[x, y] = 0
 
-if doPrint:
-    print("Loaded matrix PHI with shape: ({0}, {1}) and {2} non zero elements".format(phi_matrix.shape[0],
-                                                                                      phi_matrix.shape[1],
-                                                                                      nonzero_el_count))
+        ind_X = []
 
-if nonzero_el_count < 1:
-    print("Number of non zero elements in Matrix PHI is too small: {0}".format(nonzero_el_count))
-    exit(-1)
+        for i in range(phi_whole.shape[0]):
+            if np.any(phi_whole[i, :]) or np.any(phi_whole[:, i]):
+                ind_X.append(i)
+
+        phi = phi_whole[ind_X, :][:, ind_X]
+
+        print(
+            "PHI matrix for loaded. Number of dimensions: {0}".format(len(ind_X)))
+
+        return phi, np.array(ind_X)
+
 
 # %%##################################################################
+phi_matrix, indices = load_phi(data, percentage=percentage)
 
 for combination in combinations:
 
@@ -433,6 +454,7 @@ for combination in combinations:
 
     for split in range(len(training_results[str(combination)]['acc']), nDataSplits):
         data.get_split(ratioTrain, ratioValid)
+        data.reduce_dim(indices)
 
         ###################################################################
         #                                                                   #
@@ -448,15 +470,15 @@ for combination in combinations:
         # enforced connectedness, for instance)
         nNodes = phi_matrix.shape[0]
 
-        nodesToKeep = np.array(nodes_to_keep)
-        # And re-update the data (keep only the nodes that are kept after isolated
-        # nodes or nodes to make the graph connected have been removed)
-        data.samples['train']['signals'] = \
-            data.samples['train']['signals'][:, nodes_to_keep]
-        data.samples['valid']['signals'] = \
-            data.samples['valid']['signals'][:, nodes_to_keep]
-        data.samples['test']['signals'] = \
-            data.samples['test']['signals'][:, nodes_to_keep]
+        # nodesToKeep = np.array(nodes_to_keep)
+        # # And re-update the data (keep only the nodes that are kept after isolated
+        # # nodes or nodes to make the graph connected have been removed)
+        # data.samples['train']['signals'] = \
+        #     data.samples['train']['signals'][:, nodes_to_keep]
+        # data.samples['valid']['signals'] = \
+        #     data.samples['valid']['signals'][:, nodes_to_keep]
+        # data.samples['test']['signals'] = \
+        #     data.samples['test']['signals'][:, nodes_to_keep]
 
         # Once data is completely formatted and in appropriate fashion, change its
         # type to torch and move it to the appropriate device
