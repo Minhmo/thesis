@@ -89,7 +89,7 @@ all_author_names = ['abbott', 'stevenson', 'alcott', 'alger', 'allen', 'austen',
                     'garland', 'hawthorne', 'james', 'melville', 'page', 'thoreau', 'twain', 'doyle', 'irving', 'poe',
                     'jewett', 'wharton']
 
-BASE_FILE_NAME = 'gender_nationality_edgenet_results'
+BASE_FILE_NAME = 'gender_nationality_edgenet_results_{0}_{1}_{2}.txt'
 
 thisFilename = 'authorEdgeNets'  # This is the general name of all related files
 
@@ -158,8 +158,8 @@ saveSeed(randomStates, saveDir)
 #
 # author_name_comb = dict(zip(all_author_names, tuples))
 
-nFeatures = [1, 2]  # F: number of output features of the only layer
-nShifts = [2]  # K: number of shift tap
+nFeatures = [1, 16]  # F: number of output features of the only layer
+nShifts = [4]  # K: number of shift tap
 
 # set training params
 nClasses = 4  # Either authorName or not
@@ -377,12 +377,15 @@ combinations = list(itertools.product(F, K))
 
 training_results = {}
 
+file_name = BASE_FILE_NAME.format("GCNN", '', '16-4')
+# svc_file_name = BASE_FILE_NAME.format("SVM", '', 'search')
+
 # Start generating a new data split for each of the number of data splits that
 # we previously specified
-file_name = "{0}.txt".format(BASE_FILE_NAME)
-if path.exists(file_name) and os.stat(file_name).st_size > 0:
-    with open(file_name, 'r') as f:
-        training_results = json.load(f)
+# file_name = "{0}.txt".format(BASE_FILE_NAME)
+# if path.exists(file_name) and os.stat(file_name).st_size > 0:
+#     with open(file_name, 'r') as f:
+#         training_results = json.load(f)
 
 #   Load the data, which will give a specific split
 data = Utils.dataTools.AutorshipGenderNationality(ratioTrain, ratioValid, dataPath)
@@ -682,5 +685,5 @@ for combination in combinations:
             training_results[str(combination)] = {"acc": list(accBest['PolynomiGNN']),
                                                   "f1": list(f1_best['PolynomiGNN'])}
 
-            with open('{0}.txt'.format(BASE_FILE_NAME), 'w+') as outfile:
+            with open(file_name, 'w+') as outfile:
                 json.dump(training_results, outfile)
