@@ -158,7 +158,7 @@ saveSeed(randomStates, saveDir)
 #
 # author_name_comb = dict(zip(all_author_names, tuples))
 
-nFeatures = [1, 16]  # F: number of output features of the only layer
+nFeatures = [1, 32]  # F: number of output features of the only layer
 nShifts = [4]  # K: number of shift tap
 
 # set training params
@@ -377,7 +377,7 @@ combinations = list(itertools.product(F, K))
 
 training_results = {}
 
-file_name = BASE_FILE_NAME.format("GCNN", '', '16-4')
+file_name = BASE_FILE_NAME.format("GCNN", '', '32-4')
 # svc_file_name = BASE_FILE_NAME.format("SVM", '', 'search')
 
 # Start generating a new data split for each of the number of data splits that

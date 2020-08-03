@@ -89,7 +89,7 @@ all_author_names = ['abbott', 'stevenson', 'alcott', 'alger', 'allen', 'austen',
                     'garland', 'hawthorne', 'james', 'melville', 'page', 'thoreau', 'twain', 'doyle', 'irving', 'poe',
                     'jewett', 'wharton']
 
-BASE_FILE_NAME = 'GNN_Polynomial_gender_results_'
+BASE_FILE_NAME = 'gender_nationality_Edg-GCNN_results_'
 
 thisFilename = 'authorEdgeNets'  # This is the general name of all related files
 

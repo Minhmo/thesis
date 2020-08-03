@@ -5,6 +5,8 @@ import matplotlib.colors as mcolors
 
 
 def stacked_bar_plot(labels, mean_1, mean2, err_1, err_2, label_1, label_2):
+    plt.style.use('fivethirtyeight')
+
     x = np.arange(len(labels))  # the label locations
     width = 0.35  # the width of the bars
 
@@ -22,6 +24,8 @@ def stacked_bar_plot(labels, mean_1, mean2, err_1, err_2, label_1, label_2):
 
 
 def box_plot_with_dist(labels, data, title, y_label='Classification error'):
+    # plt.style.use('fivethirtyeight')
+
     fig, ax = plt.subplots()
     ax.set_title(title)
     ax.boxplot(data, labels=labels)
