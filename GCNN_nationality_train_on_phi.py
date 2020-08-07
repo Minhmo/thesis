@@ -90,7 +90,7 @@ all_author_names = ['abbott', 'stevenson', 'alcott', 'alger', 'allen', 'austen',
                     'garland', 'hawthorne', 'james', 'melville', 'page', 'thoreau', 'twain', 'doyle', 'irving', 'poe',
                     'jewett', 'wharton']
 
-BASE_FILE_NAME = 'GCNN_nationality_phi_results'
+BASE_FILE_NAME = 'GCNN_nationality_phi_results_0.6'
 
 thisFilename = 'authorEdgeNets'  # This is the general name of all related files
 
@@ -112,7 +112,7 @@ doFigs = True  # Plot some figures (this only works if doSaveVars is True)
 today = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
 
 file_name = BASE_FILE_NAME + ".txt"
-svc_file_name = "SVC_nationality_phi_results.txt"
+svc_file_name = "SVC_nationality_phi_results_0.6.txt"
 
 # Append date and time of the run to the directory, to avoid several runs of
 # overwritting each other.
@@ -468,7 +468,7 @@ def evaluate_svc(arch, data):
 
 # %%##################################################################
 
-phi_matrix, indices = load_phi(data)
+phi_matrix, indices = load_phi(data, percentage=0.6)
 
 for combination in combinations:
     #
