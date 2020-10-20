@@ -87,7 +87,7 @@ def train_networks(data, name=""):
     svc_search_results = train_svm(data)
     # mean_svc = np.mean(svc_search_results)
     # means_knn = [np.mean(v) for k, v in knn_search_results.items()]
-    with open('svm_results_{}.txt'.format(name), 'w+') as outfile:
+    with open('gender_nationality_svm_results_{}.txt'.format(name), 'w+') as outfile:
         json.dump(svc_search_results, outfile)
 
 

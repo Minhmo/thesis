@@ -643,5 +643,5 @@ result = {'nodes':  [int(x) for x in nodesToKeep], 'order':  [int(x) for x in or
           'phi': phi.tolist()}
 
 
-with open('EdgeVariGNN_gender_phi.txt', 'w+') as outfile:
+with open('results/EdgeVariGNN_gender_phi.txt', 'w+') as outfile:
     json.dump(result, outfile)

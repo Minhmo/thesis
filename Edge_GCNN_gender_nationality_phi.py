@@ -382,7 +382,7 @@ data = Utils.dataTools.AutorshipGenderNationality(ratioTrain, ratioValid, dataPa
 #                                                                   #
 #####################################################################
 
-with open('EdgeVariGNN_gender_nationality_phi.txt', 'r') as f:
+with open('results/EdgeVariGNN_gender_nationality_phi.txt', 'r') as f:
     file = json.load(f)
     phi = np.array(file['phi'])
 

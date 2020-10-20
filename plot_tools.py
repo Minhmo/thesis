@@ -19,12 +19,16 @@ def stacked_bar_plot(labels, mean_1, mean2, err_1, err_2, label_1, label_2):
     # ax.set_title('Error by author and network type')
     ax.set_xticks(x)
     ax.set_xticklabels(labels)
+
     ax.legend()
+
+    ax.yaxis.set_major_locator(plt.MaxNLocator(5, prune='both'))
+
     plt.show()
 
 
 def box_plot_with_dist(labels, data, title, y_label='Classification error'):
-    # plt.style.use('fivethirtyeight')
+    plt.style.use('fivethirtyeight')
 
     fig, ax = plt.subplots()
     ax.set_title(title)

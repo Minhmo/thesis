@@ -377,7 +377,7 @@ data = Utils.dataTools.AutorshipNationality(ratioTrain, ratioValid, dataPath)
 #                                                                   #
 #####################################################################
 
-with open('EdgeVariGNN_nationality_phi.txt', 'r') as f:
+with open('results/EdgeVariGNN_nationality_phi.txt', 'r') as f:
     file = json.load(f)
     phi = np.array(file['phi'])
 
